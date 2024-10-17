@@ -26,19 +26,6 @@ app.post(`/bot${token}`, (req, res) => {
     res.sendStatus(200);
 });
 
-// Escuchar en el puerto definido
-app.listen(port, () => {
-    console.log(`Bot de Telegram escuchando en el puerto ${port}`);
-    
-    // Reconfigurar webhook cada vez que la app se despliegue
-    bot.setWebHook(`${url}/bot${token}`)
-        .then(() => {
-            console.log('Webhook configurado correctamente');
-        })
-        .catch(err => {
-            console.error('Error al configurar el webhook:', err);
-        });
-});
 
 // Variables para almacenar los saldos de caja chica y gastos pendientes por grupo
 let cajaChicaPorGrupo = {};
