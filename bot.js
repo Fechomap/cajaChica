@@ -1,9 +1,30 @@
-require('dotenv').config();  // Cargar variables de entorno desde .env
+require('dotenv').config(); // Cargar variables de entorno desde .env
+const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
+const bodyParser = require('body-parser');
 
 // Usar el token del archivo .env
 const token = process.env.TELEGRAM_TOKEN;
-const bot = new TelegramBot(token, { polling: true });
+
+// URL pública de tu aplicación en Heroku
+const url = process.env.APP_URL || 'https://caja-e71a3bcba657.herokuapp.com/'; // Reemplaza con la URL de tu aplicación
+const port = process.env.PORT || 3000;
+
+// Crear el bot con webhooks
+const bot = new TelegramBot(token);
+bot.setWebHook(`${url}/bot${token}`);
+
+// Inicializar Express
+const app = express();
+
+// Middleware para parsear el cuerpo de las solicitudes
+app.use(bodyParser.json());
+
+// Ruta para recibir las actualizaciones de Telegram
+app.post(`/bot${token}`, (req, res) => {
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
+});
 
 // Variables para almacenar los saldos de caja chica y gastos pendientes por grupo
 let cajaChicaPorGrupo = {};
@@ -398,7 +419,7 @@ bot.on('message', (msg) => {
 
             // Verificar que la cantidad no exceda el saldo actual
             if (cantidad > cajaChicaPorGrupo[chatId]) {
-                bot.sendMessage(chatId, `⚠️ No puedes restar una cantidad mayor al saldo actual de la caja chica ($${cajaChicaPorGrupo[chatId].toFixed(2)} pesos ).`);
+                bot.sendMessage(chatId, `⚠️ No puedes restar una cantidad mayor al saldo actual de la caja chica (*$${cajaChicaPorGrupo[chatId].toFixed(2)}* pesos).`);
                 return;
             }
 
@@ -456,7 +477,7 @@ bot.on('message', (msg) => {
                     foto: fileId
                 });
 
-                bot.sendMessage(chatId, `📝 *Gasto Registrado*:\nID: *${gastoId}*\nCantidad: *$${cantidad.toFixed(2)}* pesos.\n🔍 Esperando aprobación del Responsable.`, { parse_mode: 'Markdown' });
+                bot.sendMessage(chatId, `📝 *Gasto Registrado*:\nID: *${gastoId}*\nCantidad: *$${cantidad.toFixed(2)}* pesos.\n🔍 Esperando aprobación del supervisor.`, { parse_mode: 'Markdown' });
 
                 // Limpiar el estado
                 delete esperandoGasto[userId];
@@ -500,4 +521,9 @@ bot.on('message', (msg) => {
             }
         }
     }
+});
+
+// Iniciar el servidor
+app.listen(port, () => {
+    console.log(`Bot de Telegram escuchando en el puerto ${port}`);
 });
