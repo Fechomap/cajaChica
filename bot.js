@@ -31,10 +31,10 @@ let cajaChicaPorGrupo = {};
 let gastosPendientesPorGrupo = {};
 
 // Usuarios autorizados para manipular la caja chica (supervisores)
-const supervisoresAutorizados = [7143094298]; // Reemplaza con los IDs de los supervisores autorizados
+const supervisoresAutorizados = [7143094298, 5660087041]; // Reemplaza con los IDs de los supervisores autorizados
 
 // Usuarios autorizados para registrar gastos (operadores)
-const operadoresAutorizados = [6330970125]; // Reemplaza con los IDs de los operadores autorizados
+const operadoresAutorizados = [6330970125, 8048487029, 7509818905, 7754458578]; // Reemplaza con los IDs de los operadores autorizados
 
 // Función para verificar si el usuario es supervisor
 function esSupervisor(userId) {
