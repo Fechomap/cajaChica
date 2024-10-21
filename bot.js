@@ -7,14 +7,11 @@ const mongoose = require('mongoose');
 // Usar el token del archivo .env
 const token = process.env.TELEGRAM_TOKEN;
 
-// Obtener el nombre de la aplicación en Heroku
-const appName = process.env.HEROKU_APP_NAME;
-
-// Construir la URL pública de la aplicación
-const url = process.env.APP_URL || (appName ? `https://${appName}.herokuapp.com` : null);
+// Construir la URL pública de la aplicación (fija)
+const url = process.env.APP_URL; // Asegúrate de definir APP_URL en .env, por ejemplo: https://caja-e71a3bcba657.herokuapp.com
 
 if (!url) {
-    console.error('Error: APP_URL no está definido y HEROKU_APP_NAME no está disponible.');
+    console.error('Error: APP_URL no está definido en el archivo .env.');
     process.exit(1);
 }
 
@@ -28,13 +25,6 @@ const app = express();
 
 // Middleware para parsear el cuerpo de las solicitudes
 app.use(bodyParser.json());
-
-// Conectar a MongoDB
-const mongoURI = process.env.MONGODB_URI;
-
-mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => console.log('Conectado a MongoDB'))
-    .catch(err => console.error('Error al conectar a MongoDB:', err));
 
 // Importar el modelo de CajaChica
 const CajaChica = require('./models/CajaChica');
@@ -59,7 +49,6 @@ let confirmacionesPendientes = {}; // userId: { chatId, tipo, datos }
 // Comando /saldo (accesible para todos)
 bot.onText(/\/saldo/, (msg) => {
     const chatId = msg.chat.id;
-
     handleSaldo(chatId, msg.from.id);
 });
 
@@ -333,16 +322,27 @@ bot.on('message', (msg) => {
     }
 });
 
-// Iniciar el servidor y configurar el webhook
-app.listen(port, () => {
-    console.log(`Bot de Telegram escuchando en el puerto ${port}`);
+// Iniciar el servidor y configurar el webhook después de conectar a MongoDB
+mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => {
+        console.log('Conectado a MongoDB');
 
-    // Configurar el webhook después de que el servidor esté listo
-    bot.setWebHook(`${url}/bot${token}`)
-        .then(() => {
-            console.log(`Webhook configurado correctamente: ${url}/bot${token}`);
-        })
-        .catch(err => {
-            console.error('Error al configurar el webhook:', err);
+        // Configurar el webhook después de que la conexión a MongoDB esté establecida
+        app.listen(port, () => {
+            console.log(`Bot de Telegram escuchando en el puerto ${port}`);
+
+            // Configurar el webhook
+            const webhookUrl = `${url}/bot${token}`;
+            bot.setWebHook(webhookUrl)
+                .then(() => {
+                    console.log(`Webhook configurado correctamente: ${webhookUrl}`);
+                })
+                .catch(err => {
+                    console.error('Error al configurar el webhook:', err);
+                });
         });
-});
+    })
+    .catch(err => {
+        console.error('Error al conectar a MongoDB:', err);
+        process.exit(1); // Salir si no se puede conectar a la base de datos
+    });
