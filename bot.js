@@ -25,7 +25,6 @@ app.post(`/bot${token}`, (req, res) => {
     res.sendStatus(200);
 });
 
-
 // Variables para almacenar los saldos de caja chica y gastos pendientes por grupo
 let cajaChicaPorGrupo = {};
 let gastosPendientesPorGrupo = {};
@@ -33,26 +32,12 @@ let gastosPendientesPorGrupo = {};
 // Usuarios autorizados para manipular la caja chica (supervisores)
 const supervisoresAutorizados = [7143094298, 5660087041]; // Reemplaza con los IDs de los supervisores autorizados
 
-// Usuarios autorizados para registrar gastos (operadores)
-const operadoresAutorizados = [6330970125, 8048487029, 7509818905, 7754458578]; // Reemplaza con los IDs de los operadores autorizados
-
 // Función para verificar si el usuario es supervisor
 function esSupervisor(userId) {
     return supervisoresAutorizados.includes(userId);
 }
 
-// Función para verificar si el usuario es operador
-function esOperador(userId) {
-    return operadoresAutorizados.includes(userId);
-}
-
-// Función para verificar si el usuario está autorizado (supervisor u operador)
-function estaAutorizado(userId) {
-    return esSupervisor(userId) || esOperador(userId);
-}
-
-// Objetos para manejar el estado de las conversaciones
-let esperandoGasto = {}; // userId: { chatId, paso, datos }
+// Objeto para manejar el estado de las confirmaciones pendientes
 let confirmacionesPendientes = {}; // userId: { chatId, tipo, datos }
 
 // Comando /saldo (accesible para todos)
@@ -94,29 +79,6 @@ bot.onText(/\/sup/, (msg) => {
     bot.sendMessage(chatId, '🛠️ *Menú de Supervisores*:\nElige una opción:', { parse_mode: 'Markdown', ...opciones });
 });
 
-// Comando /g (menú para operadores)
-bot.onText(/\/g/, (msg) => {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id;
-
-    if (!esOperador(userId)) {
-        bot.sendMessage(chatId, '❌ ¡Ups! No tienes permiso para acceder al menú de operadores.');
-        return;
-    }
-
-    const opciones = {
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: '💸 Registrar Gasto', callback_data: 'registrarGasto' }],
-                [{ text: '📋 Ver Gastos Pendientes', callback_data: 'verGastos' }],
-                [{ text: '💰 Ver Saldo', callback_data: 'verSaldo' }]
-            ]
-        }
-    };
-
-    bot.sendMessage(chatId, '👷 *Menú de Operadores*:\nElige una opción:', { parse_mode: 'Markdown', ...opciones });
-});
-
 // Manejar las interacciones del Inline Keyboard
 bot.on('callback_query', (callbackQuery) => {
     const msg = callbackQuery.message;
@@ -129,15 +91,13 @@ bot.on('callback_query', (callbackQuery) => {
 
     if (data === 'verSaldo') {
         handleSaldo(chatId, userId);
-    } else if (data === 'registrarGasto' && esOperador(userId)) {
-        iniciarRegistroGasto(chatId, userId);
     } else if (data === 'iniciarCaja' && esSupervisor(userId)) {
         iniciarCaja(chatId, userId);
     } else if (data === 'agregarDinero' && esSupervisor(userId)) {
         agregarDinero(chatId, userId);
     } else if (data === 'restarDinero' && esSupervisor(userId)) {
         restarDinero(chatId, userId);
-    } else if (data === 'verGastos' && estaAutorizado(userId)) {
+    } else if (data === 'verGastos' && esSupervisor(userId)) {
         verGastosPendientes(chatId, userId);
     } else if (data === 'aprobarGasto' && esSupervisor(userId)) {
         aprobarGasto(chatId, userId);
@@ -145,12 +105,9 @@ bot.on('callback_query', (callbackQuery) => {
         confirmarAgregarDinero(chatId, userId);
     } else if (data === 'confirmarRestar' && esSupervisor(userId)) {
         confirmarRestarDinero(chatId, userId);
-    } else if (data === 'confirmarRegistrarGasto' && esOperador(userId)) {
-        confirmarRegistrarGasto(chatId, userId);
     } else if (data === 'cancelar') {
         bot.sendMessage(chatId, '🚫 Operación cancelada.');
         delete confirmacionesPendientes[userId];
-        delete esperandoGasto[userId];
     } else if (data.startsWith('aprobar_') && esSupervisor(userId)) {
         const gastoId = parseInt(data.split('_')[1], 10);
         procesarAprobacionGasto(chatId, userId, gastoId);
@@ -171,43 +128,6 @@ function handleSaldo(chatId, userId) {
     }
 
     bot.sendMessage(chatId, `💰 *Saldo Actual*:\n*${cajaChicaPorGrupo[chatId].toFixed(2)}* pesos.`, { parse_mode: 'Markdown' });
-}
-
-// Función para iniciar el registro de un gasto (operadores)
-function iniciarRegistroGasto(chatId, userId) {
-    // Verificar si ya existe una caja chica en el grupo
-    if (!cajaChicaPorGrupo[chatId]) {
-        bot.sendMessage(chatId, '⚠️ Primero el supervisor debe iniciar la caja chica.');
-        return;
-    }
-
-    // Pregunta de confirmación
-    const opciones = {
-        reply_markup: {
-            inline_keyboard: [
-                [
-                    { text: '✅ Sí', callback_data: 'confirmarRegistrarGasto' },
-                    { text: '❌ No', callback_data: 'cancelar' }
-                ]
-            ]
-        },
-        parse_mode: 'Markdown'
-    };
-
-    bot.sendMessage(chatId, '💸 ¿Deseas registrar un nuevo gasto?', opciones);
-    confirmacionesPendientes[userId] = { chatId, tipo: 'registrarGasto' };
-}
-
-// Función para confirmar el inicio del registro de gasto (operadores)
-function confirmarRegistrarGasto(chatId, userId) {
-    const confirmacion = confirmacionesPendientes[userId];
-    if (confirmacion && confirmacion.tipo === 'registrarGasto') {
-        bot.sendMessage(chatId, '💸 *Registro de Gasto*:\n¿Cuánto gastaste? (Ingresa una cantidad, por ejemplo: 300.50)', { parse_mode: 'Markdown' });
-        esperandoGasto[userId] = { chatId, paso: 'esperandoCantidad' };
-        delete confirmacionesPendientes[userId];
-    } else {
-        bot.sendMessage(chatId, '⚠️ No hay una acción pendiente de confirmación.');
-    }
 }
 
 // Función para iniciar la caja chica (supervisores)
@@ -233,7 +153,7 @@ function restarDinero(chatId, userId) {
     confirmacionesPendientes[userId] = { chatId, tipo: 'restarDinero' };
 }
 
-// Función para ver gastos pendientes (supervisores y operadores)
+// Función para ver gastos pendientes (supervisores)
 function verGastosPendientes(chatId, userId) {
     // Verificar si ya existe una caja chica en el grupo
     if (!cajaChicaPorGrupo[chatId]) {
@@ -440,85 +360,6 @@ bot.on('message', (msg) => {
             };
 
             bot.sendMessage(chatId, `¿Estás seguro de que deseas restar *$${cantidad.toFixed(2)}* pesos de la caja chica?`, opciones);
-        }
-    }
-
-    // Manejar registro de gasto de operadores
-    if (esperandoGasto[userId]) {
-        const { chatId: chatIdOriginal, paso } = esperandoGasto[userId];
-
-        if (paso === 'esperandoCantidad') {
-            const cantidad = parseFloat(msg.text);
-            if (isNaN(cantidad) || cantidad <= 0) {
-                bot.sendMessage(chatIdOriginal, '⚠️ Por favor, ingresa una cantidad válida para el gasto.');
-                return;
-            }
-
-            esperandoGasto[userId].cantidad = parseFloat(cantidad.toFixed(2));
-            esperandoGasto[userId].paso = 'esperandoFoto';
-            bot.sendMessage(chatIdOriginal, '🖼️ *Adjunta una foto del comprobante* 📸.\nSi no tienes un comprobante, puedes subir cualquier foto y especificar el motivo.', { parse_mode: 'Markdown' });
-        } else if (paso === 'esperandoFoto') {
-            const cantidad = esperandoGasto[userId].cantidad;
-
-            if (msg.photo) {
-                const fotoArray = msg.photo;
-                const foto = fotoArray[fotoArray.length - 1]; // Obtener la mejor calidad
-                const fileId = foto.file_id;
-
-                // Registrar el gasto
-                const gastoId = (gastosPendientesPorGrupo[chatId] || []).length + 1;
-                if (!gastosPendientesPorGrupo[chatId]) gastosPendientesPorGrupo[chatId] = [];
-
-                gastosPendientesPorGrupo[chatId].push({
-                    id: gastoId,
-                    usuario: msg.from.username || msg.from.first_name || 'Anónimo',
-                    cantidad: cantidad,
-                    timestamp: new Date(),
-                    foto: fileId
-                });
-
-                bot.sendMessage(chatId, `📝 *Gasto Registrado*:\nID: *${gastoId}*\nCantidad: *$${cantidad.toFixed(2)}* pesos.\n🔍 Esperando aprobación del supervisor.`, { parse_mode: 'Markdown' });
-
-                // Limpiar el estado
-                delete esperandoGasto[userId];
-            } else if (msg.text) {
-                // Si no se sube una foto, solicitar una foto cualquiera y especificar el motivo
-                const motivo = msg.text;
-                esperandoGasto[userId].motivo = motivo;
-                esperandoGasto[userId].paso = 'esperandoFotoAlternativa';
-                bot.sendMessage(chatId, '🖼️ *Por favor, sube una foto de cualquier imagen* 📸 y especifica el motivo de la ausencia del comprobante.', { parse_mode: 'Markdown' });
-            } else {
-                bot.sendMessage(chatId, '⚠️ Por favor, sube una foto del comprobante o escribe el motivo de la ausencia.');
-            }
-        } else if (paso === 'esperandoFotoAlternativa') {
-            const cantidad = esperandoGasto[userId].cantidad;
-            const motivo = esperandoGasto[userId].motivo;
-
-            if (msg.photo) {
-                const fotoArray = msg.photo;
-                const foto = fotoArray[fotoArray.length - 1]; // Obtener la mejor calidad
-                const fileId = foto.file_id;
-
-                // Registrar el gasto
-                const gastoId = (gastosPendientesPorGrupo[chatId] || []).length + 1;
-                if (!gastosPendientesPorGrupo[chatId]) gastosPendientesPorGrupo[chatId] = [];
-
-                gastosPendientesPorGrupo[chatId].push({
-                    id: gastoId,
-                    usuario: msg.from.username || msg.from.first_name || 'Anónimo',
-                    cantidad: cantidad,
-                    timestamp: new Date(),
-                    foto: fileId,
-                    motivo: motivo
-                });
-
-                bot.sendMessage(chatId, `📝 *Gasto Registrado*:\nID: *${gastoId}*\nCantidad: *$${cantidad.toFixed(2)}* pesos.\n*Motivo:* ${motivo}\n🔍 Esperando aprobación del supervisor.`, { parse_mode: 'Markdown' });
-
-                // Limpiar el estado
-                delete esperandoGasto[userId];
-            } else {
-                bot.sendMessage(chatId, '⚠️ Por favor, sube una foto para completar el registro del gasto.');
-            }
         }
     }
 });
