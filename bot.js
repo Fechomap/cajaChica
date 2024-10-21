@@ -17,8 +17,8 @@ if (!url) {
 
 const port = process.env.PORT || 3000;
 
-// Crear el bot sin configurar el webhook aún
-const bot = new TelegramBot(token);
+// Crear el bot con polling deshabilitado
+const bot = new TelegramBot(token, { polling: false });
 
 // Inicializar Express
 const app = express();
@@ -322,12 +322,12 @@ bot.on('message', (msg) => {
     }
 });
 
-// Iniciar el servidor y configurar el webhook después de conectar a MongoDB
+// Conectar a MongoDB y configurar el webhook después de la conexión
 mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
     .then(() => {
         console.log('Conectado a MongoDB');
 
-        // Configurar el webhook después de que la conexión a MongoDB esté establecida
+        // Iniciar el servidor Express
         app.listen(port, () => {
             console.log(`Bot de Telegram escuchando en el puerto ${port}`);
 
