@@ -6,8 +6,17 @@ const bodyParser = require('body-parser');
 // Usar el token del archivo .env
 const token = process.env.TELEGRAM_TOKEN;
 
-// URL pública de tu aplicación en Heroku
-const url = process.env.APP_URL || 'https://caja-e71a3bcba657.herokuapp.com'; // Asegúrate de que esta URL sea correcta
+// Obtener el nombre de la aplicación en Heroku
+const appName = process.env.HEROKU_APP_NAME;
+
+// Construir la URL pública de la aplicación
+const url = process.env.APP_URL || (appName ? `https://${appName}.herokuapp.com` : null);
+
+if (!url) {
+    console.error('Error: APP_URL no está definido y HEROKU_APP_NAME no está disponible.');
+    process.exit(1);
+}
+
 const port = process.env.PORT || 3000;
 
 // Crear el bot sin configurar el webhook aún
@@ -25,9 +34,8 @@ app.post(`/bot${token}`, (req, res) => {
     res.sendStatus(200);
 });
 
-// Variables para almacenar los saldos de caja chica y gastos pendientes por grupo
+// Variable para almacenar los saldos de caja chica por grupo
 let cajaChicaPorGrupo = {};
-let gastosPendientesPorGrupo = {};
 
 // Usuarios autorizados para manipular la caja chica (supervisores)
 const supervisoresAutorizados = [7143094298, 5660087041]; // Reemplaza con los IDs de los supervisores autorizados
@@ -69,8 +77,6 @@ bot.onText(/\/sup/, (msg) => {
                 [{ text: '🏁 Iniciar Caja', callback_data: 'iniciarCaja' }],
                 [{ text: '➕ Agregar Dinero', callback_data: 'agregarDinero' }],
                 [{ text: '➖ Restar Dinero', callback_data: 'restarDinero' }],
-                [{ text: '✅ Aprobar Gasto', callback_data: 'aprobarGasto' }],
-                [{ text: '📋 Ver Gastos Pendientes', callback_data: 'verGastos' }],
                 [{ text: '💰 Ver Saldo', callback_data: 'verSaldo' }]
             ]
         }
@@ -97,10 +103,6 @@ bot.on('callback_query', (callbackQuery) => {
         agregarDinero(chatId, userId);
     } else if (data === 'restarDinero' && esSupervisor(userId)) {
         restarDinero(chatId, userId);
-    } else if (data === 'verGastos' && esSupervisor(userId)) {
-        verGastosPendientes(chatId, userId);
-    } else if (data === 'aprobarGasto' && esSupervisor(userId)) {
-        aprobarGasto(chatId, userId);
     } else if (data === 'confirmarAgregar' && esSupervisor(userId)) {
         confirmarAgregarDinero(chatId, userId);
     } else if (data === 'confirmarRestar' && esSupervisor(userId)) {
@@ -108,12 +110,6 @@ bot.on('callback_query', (callbackQuery) => {
     } else if (data === 'cancelar') {
         bot.sendMessage(chatId, '🚫 Operación cancelada.');
         delete confirmacionesPendientes[userId];
-    } else if (data.startsWith('aprobar_') && esSupervisor(userId)) {
-        const gastoId = parseInt(data.split('_')[1], 10);
-        procesarAprobacionGasto(chatId, userId, gastoId);
-    } else if (data.startsWith('confirmaAprobacion_') && esSupervisor(userId)) {
-        const gastoId = parseInt(data.split('_')[1], 10);
-        confirmarAprobacionGasto(chatId, gastoId);
     } else {
         bot.sendMessage(chatId, '❌ Opción no válida o no tienes permiso para realizar esta acción.');
     }
@@ -153,85 +149,6 @@ function restarDinero(chatId, userId) {
     confirmacionesPendientes[userId] = { chatId, tipo: 'restarDinero' };
 }
 
-// Función para ver gastos pendientes (supervisores)
-function verGastosPendientes(chatId, userId) {
-    // Verificar si ya existe una caja chica en el grupo
-    if (!cajaChicaPorGrupo[chatId]) {
-        bot.sendMessage(chatId, '⚠️ Primero el supervisor debe iniciar la caja chica.');
-        return;
-    }
-
-    const gastosPendientes = gastosPendientesPorGrupo[chatId] || [];
-    if (gastosPendientes.length === 0) {
-        bot.sendMessage(chatId, '✅ No hay gastos pendientes por aprobar. 🟢');
-        return;
-    }
-
-    let mensaje = '📝 *Gastos Pendientes por Aprobar*:\n\n';
-    gastosPendientes.forEach(gasto => {
-        mensaje += `• *ID:* ${gasto.id}\n  *Usuario:* ${gasto.usuario}\n  *Cantidad:* $${gasto.cantidad.toFixed(2)} pesos\n  *Fecha:* ${gasto.timestamp.toLocaleString()}\n`;
-        if (gasto.motivo) {
-            mensaje += `  *Motivo:* ${gasto.motivo}\n`;
-        }
-        mensaje += `\n`;
-    });
-
-    bot.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' });
-}
-
-// Función para aprobar gastos (supervisores)
-function aprobarGasto(chatId, userId) {
-    // Verificar si hay gastos pendientes
-    const gastosPendientes = gastosPendientesPorGrupo[chatId] || [];
-    if (gastosPendientes.length === 0) {
-        bot.sendMessage(chatId, '✅ No hay gastos pendientes por aprobar. 🟢');
-        return;
-    }
-
-    // Mostrar lista de gastos pendientes con botones
-    const opciones = {
-        reply_markup: {
-            inline_keyboard: gastosPendientes.map(gasto => ([
-                { text: `Aprobar Gasto ID ${gasto.id} - $${gasto.cantidad.toFixed(2)}`, callback_data: `aprobar_${gasto.id}` }
-            ]))
-        }
-    };
-
-    bot.sendMessage(chatId, 'Seleccione el gasto que desea aprobar:', opciones);
-}
-
-// Manejar aprobaciones de gastos individuales
-function procesarAprobacionGasto(chatId, userId, gastoId) {
-    const gastosPendientes = gastosPendientesPorGrupo[chatId] || [];
-    const gasto = gastosPendientes.find(g => g.id === gastoId);
-
-    if (!gasto) {
-        bot.sendMessage(chatId, `⚠️ No se encontró un gasto con ID *${gastoId}*.`, { parse_mode: 'Markdown' });
-        return;
-    }
-
-    // Verificar que el saldo sea suficiente
-    if (gasto.cantidad > cajaChicaPorGrupo[chatId]) {
-        bot.sendMessage(chatId, `⚠️ No hay suficiente saldo para aprobar este gasto. Saldo actual: *$${cajaChicaPorGrupo[chatId].toFixed(2)}* pesos.`, { parse_mode: 'Markdown' });
-        return;
-    }
-
-    // Confirmación con botones inline
-    const opciones = {
-        reply_markup: {
-            inline_keyboard: [
-                [
-                    { text: '✅ Sí', callback_data: `confirmaAprobacion_${gastoId}` },
-                    { text: '❌ No', callback_data: 'cancelar' }
-                ]
-            ]
-        },
-        parse_mode: 'Markdown'
-    };
-
-    bot.sendMessage(chatId, `¿Estás seguro de que deseas aprobar y restar *$${gasto.cantidad.toFixed(2)}* pesos del gasto con ID *${gastoId}*?`, opciones);
-}
-
 // Confirmar agregar dinero (supervisores)
 function confirmarAgregarDinero(chatId, userId) {
     const confirmacion = confirmacionesPendientes[userId];
@@ -260,28 +177,6 @@ function confirmarRestarDinero(chatId, userId) {
     }
 }
 
-// Confirmar aprobación de gasto (supervisores)
-function confirmarAprobacionGasto(chatId, gastoId) {
-    const gastosPendientes = gastosPendientesPorGrupo[chatId];
-    const gastoIndex = gastosPendientes.findIndex(g => g.id === gastoId);
-
-    if (gastoIndex === -1) {
-        bot.sendMessage(chatId, `⚠️ No se encontró un gasto con ID *${gastoId}*.`, { parse_mode: 'Markdown' });
-        return;
-    }
-
-    const gasto = gastosPendientes[gastoIndex];
-
-    // Restar del saldo
-    cajaChicaPorGrupo[chatId] -= gasto.cantidad;
-    cajaChicaPorGrupo[chatId] = parseFloat(cajaChicaPorGrupo[chatId].toFixed(2));
-
-    // Eliminar el gasto de pendientes
-    gastosPendientes.splice(gastoIndex, 1);
-
-    bot.sendMessage(chatId, `✅ Se ha aprobado y restado *$${gasto.cantidad.toFixed(2)}* pesos del gasto con ID *${gastoId}*.\n💰 Nuevo saldo: *$${cajaChicaPorGrupo[chatId].toFixed(2)}* pesos.`, { parse_mode: 'Markdown' });
-}
-
 // Manejar mensajes de entrada (para cantidades y confirmaciones)
 bot.on('message', (msg) => {
     const chatId = msg.chat.id;
@@ -302,7 +197,6 @@ bot.on('message', (msg) => {
             }
 
             cajaChicaPorGrupo[chatId] = parseFloat(montoInicial.toFixed(2));
-            gastosPendientesPorGrupo[chatId] = [];
             bot.sendMessage(chatId, `✅ Se ha iniciado la caja chica con *$${cajaChicaPorGrupo[chatId].toFixed(2)}* pesos. 💰`, { parse_mode: 'Markdown' });
 
             delete confirmacionesPendientes[userId];
@@ -371,7 +265,7 @@ app.listen(port, () => {
     // Configurar el webhook después de que el servidor esté listo
     bot.setWebHook(`${url}/bot${token}`)
         .then(() => {
-            console.log('Webhook configurado correctamente');
+            console.log(`Webhook configurado correctamente: ${url}/bot${token}`);
         })
         .catch(err => {
             console.error('Error al configurar el webhook:', err);
