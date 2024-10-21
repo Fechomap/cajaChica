@@ -2,6 +2,7 @@ require('dotenv').config(); // Cargar variables de entorno desde .env
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
 
 // Usar el token del archivo .env
 const token = process.env.TELEGRAM_TOKEN;
@@ -28,14 +29,21 @@ const app = express();
 // Middleware para parsear el cuerpo de las solicitudes
 app.use(bodyParser.json());
 
+// Conectar a MongoDB
+const mongoURI = process.env.MONGODB_URI;
+
+mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log('Conectado a MongoDB'))
+    .catch(err => console.error('Error al conectar a MongoDB:', err));
+
+// Importar el modelo de CajaChica
+const CajaChica = require('./models/CajaChica');
+
 // Ruta para recibir las actualizaciones de Telegram
 app.post(`/bot${token}`, (req, res) => {
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
-
-// Variable para almacenar los saldos de caja chica por grupo
-let cajaChicaPorGrupo = {};
 
 // Usuarios autorizados para manipular la caja chica (supervisores)
 const supervisoresAutorizados = [7143094298, 5660087041]; // Reemplaza con los IDs de los supervisores autorizados
@@ -52,13 +60,7 @@ let confirmacionesPendientes = {}; // userId: { chatId, tipo, datos }
 bot.onText(/\/saldo/, (msg) => {
     const chatId = msg.chat.id;
 
-    // Verificar si ya existe una caja chica en el grupo
-    if (!cajaChicaPorGrupo[chatId]) {
-        bot.sendMessage(chatId, '⚠️ Primero debes iniciar la caja chica con `/iniciarCaja <monto_inicial>`.');
-        return;
-    }
-
-    bot.sendMessage(chatId, `💰 *Saldo Actual*:\n*${cajaChicaPorGrupo[chatId].toFixed(2)}* pesos.`, { parse_mode: 'Markdown' });
+    handleSaldo(chatId, msg.from.id);
 });
 
 // Comando /sup (menú para supervisores)
@@ -117,24 +119,37 @@ bot.on('callback_query', (callbackQuery) => {
 
 // Función para manejar la opción "Ver Saldo" (accesible para todos)
 function handleSaldo(chatId, userId) {
-    // Verificar si ya existe una caja chica en el grupo
-    if (!cajaChicaPorGrupo[chatId]) {
-        bot.sendMessage(chatId, '⚠️ Primero el supervisor debe iniciar la caja chica.');
-        return;
-    }
+    CajaChica.findOne({ chatId })
+        .then(caja => {
+            if (!caja) {
+                bot.sendMessage(chatId, '⚠️ Primero el supervisor debe iniciar la caja chica.');
+                return;
+            }
 
-    bot.sendMessage(chatId, `💰 *Saldo Actual*:\n*${cajaChicaPorGrupo[chatId].toFixed(2)}* pesos.`, { parse_mode: 'Markdown' });
+            bot.sendMessage(chatId, `💰 *Saldo Actual*:\n*${caja.saldo.toFixed(2)}* pesos.`, { parse_mode: 'Markdown' });
+        })
+        .catch(err => {
+            console.error('Error al obtener el saldo:', err);
+            bot.sendMessage(chatId, '❌ Error al obtener el saldo.');
+        });
 }
 
 // Función para iniciar la caja chica (supervisores)
 function iniciarCaja(chatId, userId) {
-    if (cajaChicaPorGrupo[chatId]) {
-        bot.sendMessage(chatId, '⚠️ La caja chica ya ha sido iniciada y no puede reiniciarse.');
-        return;
-    }
+    CajaChica.findOne({ chatId })
+        .then(caja => {
+            if (caja) {
+                bot.sendMessage(chatId, '⚠️ La caja chica ya ha sido iniciada y no puede reiniciarse.');
+                return;
+            }
 
-    bot.sendMessage(chatId, '🏁 *Iniciar Caja Chica*:\nPor favor, ingresa el monto inicial:', { parse_mode: 'Markdown' });
-    confirmacionesPendientes[userId] = { chatId, tipo: 'iniciarCaja' };
+            bot.sendMessage(chatId, '🏁 *Iniciar Caja Chica*:\nPor favor, ingresa el monto inicial:', { parse_mode: 'Markdown' });
+            confirmacionesPendientes[userId] = { chatId, tipo: 'iniciarCaja' };
+        })
+        .catch(err => {
+            console.error('Error al buscar caja chica:', err);
+            bot.sendMessage(chatId, '❌ Error al iniciar la caja chica.');
+        });
 }
 
 // Función para agregar dinero a la caja chica (supervisores)
@@ -154,10 +169,28 @@ function confirmarAgregarDinero(chatId, userId) {
     const confirmacion = confirmacionesPendientes[userId];
     if (confirmacion && confirmacion.tipo === 'agregarDinero') {
         const cantidad = confirmacion.cantidad;
-        cajaChicaPorGrupo[chatId] += cantidad;
-        cajaChicaPorGrupo[chatId] = parseFloat(cajaChicaPorGrupo[chatId].toFixed(2));
-        bot.sendMessage(chatId, `✅ Se han agregado *$${cantidad.toFixed(2)}* pesos. Nuevo saldo: *$${cajaChicaPorGrupo[chatId].toFixed(2)}* pesos. 💵`, { parse_mode: 'Markdown' });
-        delete confirmacionesPendientes[userId];
+        CajaChica.findOne({ chatId })
+            .then(caja => {
+                if (!caja) {
+                    bot.sendMessage(chatId, '⚠️ La caja chica no ha sido iniciada.');
+                    return;
+                }
+
+                caja.saldo += cantidad;
+                caja.save()
+                    .then(() => {
+                        bot.sendMessage(chatId, `✅ Se han agregado *$${cantidad.toFixed(2)}* pesos. Nuevo saldo: *$${caja.saldo.toFixed(2)}* pesos. 💵`, { parse_mode: 'Markdown' });
+                        delete confirmacionesPendientes[userId];
+                    })
+                    .catch(err => {
+                        console.error('Error al actualizar el saldo:', err);
+                        bot.sendMessage(chatId, '❌ Error al actualizar el saldo.');
+                    });
+            })
+            .catch(err => {
+                console.error('Error al buscar la caja chica:', err);
+                bot.sendMessage(chatId, '❌ Error al agregar dinero.');
+            });
     } else {
         bot.sendMessage(chatId, '⚠️ No hay una acción pendiente de confirmación.');
     }
@@ -168,10 +201,33 @@ function confirmarRestarDinero(chatId, userId) {
     const confirmacion = confirmacionesPendientes[userId];
     if (confirmacion && confirmacion.tipo === 'restarDinero') {
         const cantidad = confirmacion.cantidad;
-        cajaChicaPorGrupo[chatId] -= cantidad;
-        cajaChicaPorGrupo[chatId] = parseFloat(cajaChicaPorGrupo[chatId].toFixed(2));
-        bot.sendMessage(chatId, `✅ Se han restado *$${cantidad.toFixed(2)}* pesos. Nuevo saldo: *$${cajaChicaPorGrupo[chatId].toFixed(2)}* pesos. 💸`, { parse_mode: 'Markdown' });
-        delete confirmacionesPendientes[userId];
+        CajaChica.findOne({ chatId })
+            .then(caja => {
+                if (!caja) {
+                    bot.sendMessage(chatId, '⚠️ La caja chica no ha sido iniciada.');
+                    return;
+                }
+
+                if (cantidad > caja.saldo) {
+                    bot.sendMessage(chatId, `⚠️ No puedes restar una cantidad mayor al saldo actual de la caja chica (*$${caja.saldo.toFixed(2)}* pesos).`);
+                    return;
+                }
+
+                caja.saldo -= cantidad;
+                caja.save()
+                    .then(() => {
+                        bot.sendMessage(chatId, `✅ Se han restado *$${cantidad.toFixed(2)}* pesos. Nuevo saldo: *$${caja.saldo.toFixed(2)}* pesos. 💸`, { parse_mode: 'Markdown' });
+                        delete confirmacionesPendientes[userId];
+                    })
+                    .catch(err => {
+                        console.error('Error al actualizar el saldo:', err);
+                        bot.sendMessage(chatId, '❌ Error al actualizar el saldo.');
+                    });
+            })
+            .catch(err => {
+                console.error('Error al buscar la caja chica:', err);
+                bot.sendMessage(chatId, '❌ Error al restar dinero.');
+            });
     } else {
         bot.sendMessage(chatId, '⚠️ No hay una acción pendiente de confirmación.');
     }
@@ -196,10 +252,17 @@ bot.on('message', (msg) => {
                 return;
             }
 
-            cajaChicaPorGrupo[chatId] = parseFloat(montoInicial.toFixed(2));
-            bot.sendMessage(chatId, `✅ Se ha iniciado la caja chica con *$${cajaChicaPorGrupo[chatId].toFixed(2)}* pesos. 💰`, { parse_mode: 'Markdown' });
-
-            delete confirmacionesPendientes[userId];
+            // Crear una nueva caja chica en la base de datos
+            const nuevaCaja = new CajaChica({ chatId, saldo: montoInicial });
+            nuevaCaja.save()
+                .then(() => {
+                    bot.sendMessage(chatId, `✅ Se ha iniciado la caja chica con *$${montoInicial.toFixed(2)}* pesos. 💰`, { parse_mode: 'Markdown' });
+                    delete confirmacionesPendientes[userId];
+                })
+                .catch(err => {
+                    console.error('Error al guardar la caja chica:', err);
+                    bot.sendMessage(chatId, '❌ Error al iniciar la caja chica.');
+                });
         } else if (tipo === 'agregarDinero') {
             const cantidad = parseFloat(msg.text);
             if (isNaN(cantidad) || cantidad <= 0) {
@@ -231,29 +294,41 @@ bot.on('message', (msg) => {
                 return;
             }
 
-            // Verificar que la cantidad no exceda el saldo actual
-            if (cantidad > cajaChicaPorGrupo[chatId]) {
-                bot.sendMessage(chatId, `⚠️ No puedes restar una cantidad mayor al saldo actual de la caja chica (*$${cajaChicaPorGrupo[chatId].toFixed(2)}* pesos).`);
-                return;
-            }
+            // Buscar el saldo actual antes de confirmar
+            CajaChica.findOne({ chatId })
+                .then(caja => {
+                    if (!caja) {
+                        bot.sendMessage(chatId, '⚠️ La caja chica no ha sido iniciada.');
+                        return;
+                    }
 
-            // Guardar la cantidad para la confirmación
-            confirmacionesPendientes[userId].cantidad = cantidad;
+                    if (cantidad > caja.saldo) {
+                        bot.sendMessage(chatId, `⚠️ No puedes restar una cantidad mayor al saldo actual de la caja chica (*$${caja.saldo.toFixed(2)}* pesos).`);
+                        return;
+                    }
 
-            // Confirmación con botones inline
-            const opciones = {
-                reply_markup: {
-                    inline_keyboard: [
-                        [
-                            { text: '✅ Sí', callback_data: 'confirmarRestar' },
-                            { text: '❌ No', callback_data: 'cancelar' }
-                        ]
-                    ]
-                },
-                parse_mode: 'Markdown'
-            };
+                    // Guardar la cantidad para la confirmación
+                    confirmacionesPendientes[userId].cantidad = cantidad;
 
-            bot.sendMessage(chatId, `¿Estás seguro de que deseas restar *$${cantidad.toFixed(2)}* pesos de la caja chica?`, opciones);
+                    // Confirmación con botones inline
+                    const opciones = {
+                        reply_markup: {
+                            inline_keyboard: [
+                                [
+                                    { text: '✅ Sí', callback_data: 'confirmarRestar' },
+                                    { text: '❌ No', callback_data: 'cancelar' }
+                                ]
+                            ]
+                        },
+                        parse_mode: 'Markdown'
+                    };
+
+                    bot.sendMessage(chatId, `¿Estás seguro de que deseas restar *$${cantidad.toFixed(2)}* pesos de la caja chica?`, opciones);
+                })
+                .catch(err => {
+                    console.error('Error al buscar la caja chica:', err);
+                    bot.sendMessage(chatId, '❌ Error al procesar la solicitud.');
+                });
         }
     }
 });
