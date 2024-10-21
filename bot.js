@@ -7,12 +7,11 @@ const bodyParser = require('body-parser');
 const token = process.env.TELEGRAM_TOKEN;
 
 // URL pública de tu aplicación en Heroku
-const url = process.env.APP_URL || 'https://caja-e71a3bcba657.herokuapp.com/'; // Reemplaza con la URL de tu aplicación
+const url = process.env.APP_URL || 'https://caja-e71a3bcba657.herokuapp.com'; // Asegúrate de que esta URL sea correcta
 const port = process.env.PORT || 3000;
 
-// Crear el bot con webhooks
+// Crear el bot sin configurar el webhook aún
 const bot = new TelegramBot(token);
-bot.setWebHook(`${url}/bot${token}`);
 
 // Inicializar Express
 const app = express();
@@ -524,7 +523,16 @@ bot.on('message', (msg) => {
     }
 });
 
-// Iniciar el servidor
+// Iniciar el servidor y configurar el webhook
 app.listen(port, () => {
     console.log(`Bot de Telegram escuchando en el puerto ${port}`);
+
+    // Configurar el webhook después de que el servidor esté listo
+    bot.setWebHook(`${url}/bot${token}`)
+        .then(() => {
+            console.log('Webhook configurado correctamente');
+        })
+        .catch(err => {
+            console.error('Error al configurar el webhook:', err);
+        });
 });
