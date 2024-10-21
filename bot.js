@@ -7,8 +7,8 @@ const mongoose = require('mongoose');
 // Usar el token del archivo .env
 const token = process.env.TELEGRAM_TOKEN;
 
-// Construir la URL pública de la aplicación (fija)
-const url = process.env.APP_URL; // Asegúrate de definir APP_URL en .env, por ejemplo: https://caja-e71a3bcba657.herokuapp.com
+// Construir la URL pública de la aplicación (fija) sin barra al final
+const url = process.env.APP_URL.replace(/\/$/, ''); // Elimina la barra final si existe
 
 if (!url) {
     console.error('Error: APP_URL no está definido en el archivo .env.');
@@ -323,7 +323,7 @@ bot.on('message', (msg) => {
 });
 
 // Conectar a MongoDB y configurar el webhook después de la conexión
-mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect(process.env.MONGODB_URI)
     .then(() => {
         console.log('Conectado a MongoDB');
 
