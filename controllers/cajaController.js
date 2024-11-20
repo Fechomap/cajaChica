@@ -1,3 +1,4 @@
+// CajaController.js
 const CajaService = require('../services/cajaService');
 const { confirmacionesPendientes } = require('../middlewares/auth');
 

@@ -1,4 +1,4 @@
-// commandControllers.js
+// CommandController.js
 const CajaService = require('../services/cajaService');
 const { esSupervisor, verificarSupervisor } = require('../middlewares/auth');
 const { menuOptions } = require('../config/bot');
@@ -28,69 +28,6 @@ class CommandController {
                parse_mode: 'Markdown',
                ...menuOptions.supervisor 
            });
-       });
-
-       // Manejador de callbacks
-       this.bot.on('callback_query', async (callbackQuery) => {
-           const chatId = callbackQuery.message.chat.id;
-           const userId = callbackQuery.from.id;
-           const action = callbackQuery.data;
-
-           if (['iniciarCaja', 'eliminarCaja'].includes(action)) {
-               if (!verificarSupervisor(userId, chatId, this.bot)) return;
-           }
-
-           switch (action) {
-               case 'verSaldo':
-                   const saldo = await CajaService.obtenerSaldo(chatId);
-                   this.bot.sendMessage(chatId, saldo.mensaje);
-                   break;
-               case 'iniciarCaja':
-                   this.bot.sendMessage(
-                       chatId,
-                       '🏁 *Iniciar Caja Chica*:\nPor favor, ingresa el monto inicial:',
-                       { parse_mode: 'Markdown' }
-                   );
-                   break;
-               case 'agregarDinero':
-                   this.bot.sendMessage(
-                       chatId,
-                       '➕ *Agregar Dinero*:\n¿Cuánto deseas agregar?',
-                       { parse_mode: 'Markdown' }
-                   );
-                   break;
-               case 'restarDinero':
-                   this.bot.sendMessage(
-                       chatId,
-                       '➖ *Restar Dinero*:\n¿Cuánto deseas restar?',
-                       { parse_mode: 'Markdown' }
-                   );
-                   break;
-               case 'eliminarCaja':
-                   this.bot.sendMessage(
-                       chatId,
-                       '🗑️ *¿Estás seguro de eliminar la caja?*\nEsta acción no se puede deshacer.',
-                       {
-                           parse_mode: 'Markdown',
-                           reply_markup: {
-                               inline_keyboard: [
-                                   [
-                                       { text: '✅ Sí, eliminar', callback_data: 'confirmarEliminar' },
-                                       { text: '❌ No, cancelar', callback_data: 'cancelar' }
-                                   ]
-                               ]
-                           }
-                       }
-                   );
-                   break;
-               case 'confirmarEliminar':
-                   const resultadoEliminar = await CajaService.eliminarCaja(chatId);
-                   this.bot.sendMessage(chatId, resultadoEliminar.mensaje);
-                   break;
-               case 'cancelar':
-                   this.bot.sendMessage(chatId, '🚫 Operación cancelada');
-                   break;
-           }
        });
    }
 
