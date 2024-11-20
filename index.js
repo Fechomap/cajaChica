@@ -4,6 +4,18 @@ const TelegramBot = require('node-telegram-bot-api');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 
+const mongoose = require('mongoose');
+
+// Definir el esquema de CajaChica
+const CajaChicaSchema = new mongoose.Schema({
+    chatId: { type: Number, required: true, unique: true },
+    saldo: { type: Number, required: true }
+});
+
+// Crear el modelo de CajaChica
+const CajaChica = mongoose.model('CajaChica', CajaChicaSchema);
+
+
 // Usar el token del archivo .env
 const token = process.env.TELEGRAM_TOKEN;
 
@@ -25,9 +37,6 @@ const app = express();
 
 // Middleware para parsear el cuerpo de las solicitudes
 app.use(bodyParser.json());
-
-// Importar el modelo de CajaChica
-const CajaChica = require('./models/CajaChica');
 
 // Ruta para recibir las actualizaciones de Telegram
 app.post(`/bot${token}`, (req, res) => {
