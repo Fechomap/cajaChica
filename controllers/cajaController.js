@@ -19,10 +19,11 @@ class CajaController {
             this.bot.answerCallbackQuery(callbackQuery.id);
 
             switch (data) {
-                case 'verSaldo':
-                    const response = await CajaService.obtenerSaldo(chatId);
-                    this.bot.sendMessage(chatId, response.mensaje, { parse_mode: 'Markdown' });
+                case 'verSaldo': {
+                    const saldoInfo = await CajaService.obtenerSaldo(chatId);
+                    this.bot.sendMessage(chatId, saldoInfo.mensaje, { parse_mode: 'Markdown' });
                     break;
+                }
 
                 case 'iniciarCaja':
                     this.bot.sendMessage(
@@ -63,17 +64,17 @@ class CajaController {
                     };
                     break;
 
-                case 'eliminarCaja':
-                    const response = await CajaService.obtenerSaldo(chatId);
-                    if (!response.success) {
-                        this.bot.sendMessage(chatId, response.mensaje);
+                case 'eliminarCaja': {
+                    const saldoActual = await CajaService.obtenerSaldo(chatId);
+                    if (!saldoActual.success) {
+                        this.bot.sendMessage(chatId, saldoActual.mensaje);
                         return;
                     }
 
                     this.bot.sendMessage(
                         chatId,
                         `🚨 *¿Estás seguro de eliminar la caja?*\n` +
-                        `Saldo actual: *$${response.saldo.toFixed(2)}*\n` +
+                        `Saldo actual: *$${saldoActual.saldo.toFixed(2)}*\n` +
                         'Esta acción no se puede deshacer.',
                         {
                             parse_mode: 'Markdown',
@@ -93,12 +94,14 @@ class CajaController {
                         timestamp: Date.now()
                     };
                     break;
+                }
 
-                case 'confirmarEliminar':
-                    const eliminarResponse = await CajaService.eliminarCaja(chatId, userId);
-                    this.bot.sendMessage(chatId, eliminarResponse.mensaje, { parse_mode: 'Markdown' });
+                case 'confirmarEliminar': {
+                    const resultadoEliminar = await CajaService.eliminarCaja(chatId, userId);
+                    this.bot.sendMessage(chatId, resultadoEliminar.mensaje, { parse_mode: 'Markdown' });
                     delete confirmacionesPendientes[userId];
                     break;
+                }
 
                 case 'cancelar':
                     this.bot.sendMessage(chatId, '🚫 Operación cancelada.');
@@ -126,21 +129,21 @@ class CajaController {
                     return;
                 }
 
-                let response;
+                let resultado;
                 switch (tipo) {
                     case 'iniciarCaja':
-                        response = await CajaService.iniciarCaja(chatId, monto);
-                        this.bot.sendMessage(chatId, response.mensaje, { parse_mode: 'Markdown' });
+                        resultado = await CajaService.iniciarCaja(chatId, monto);
+                        this.bot.sendMessage(chatId, resultado.mensaje, { parse_mode: 'Markdown' });
                         break;
 
                     case 'agregarDinero':
-                        response = await CajaService.agregarDinero(chatId, monto, userId);
-                        this.bot.sendMessage(chatId, response.mensaje, { parse_mode: 'Markdown' });
+                        resultado = await CajaService.agregarDinero(chatId, monto, userId);
+                        this.bot.sendMessage(chatId, resultado.mensaje, { parse_mode: 'Markdown' });
                         break;
 
                     case 'restarDinero':
-                        response = await CajaService.restarDinero(chatId, monto, userId);
-                        this.bot.sendMessage(chatId, response.mensaje, { parse_mode: 'Markdown' });
+                        resultado = await CajaService.restarDinero(chatId, monto, userId);
+                        this.bot.sendMessage(chatId, resultado.mensaje, { parse_mode: 'Markdown' });
                         break;
                 }
 
