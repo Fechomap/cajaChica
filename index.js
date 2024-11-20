@@ -2,7 +2,7 @@ require('dotenv').config(); // Cargar variables de entorno desde .env
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const bodyParser = require('body-parser');
-const mongoose = require('mongoose');
+//const mongoose = require('mongoose');
 
 // Usar el token del archivo .env
 const token = process.env.TELEGRAM_TOKEN;
