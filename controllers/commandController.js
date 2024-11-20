@@ -52,8 +52,9 @@ const menuOptions = {
         reply_markup: {
             inline_keyboard: [
                 [{ text: '🏁 Iniciar Caja', callback_data: 'iniciarCaja' }],
+                [{ text: '➕ Agregar Dinero', callback_data: 'agregarDinero' }],
+                [{ text: '➖ Restar Dinero', callback_data: 'restarDinero' }],
                 [{ text: '💰 Ver Saldo', callback_data: 'verSaldo' }],
-                [{ text: '📊 Ver Historial', callback_data: 'verHistorial' }],
                 [{ text: '🗑️ Eliminar Caja', callback_data: 'eliminarCaja' }]
             ]
         }
