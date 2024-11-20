@@ -50,7 +50,6 @@ const menuOptions = {
                 [{ text: '➕ Agregar Dinero', callback_data: 'agregarDinero' }],
                 [{ text: '➖ Restar Dinero', callback_data: 'restarDinero' }],
                 [{ text: '💰 Ver Saldo', callback_data: 'verSaldo' }],
-                [{ text: '✏️ Modificar Saldo', callback_data: 'modificarSaldo' }],
                 [{ text: '🗑️ Eliminar Caja', callback_data: 'eliminarCaja' }]
             ]
         }

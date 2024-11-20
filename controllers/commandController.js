@@ -1,5 +1,6 @@
+// commandControllers.js
 const CajaService = require('../services/cajaService');
-const { esSupervisor } = require('../middlewares/auth');
+const { esSupervisor, verificarSupervisor } = require('../middlewares/auth');
 const { menuOptions } = require('../config/bot');
 
 class CommandController {
@@ -9,22 +10,19 @@ class CommandController {
     }
 
     setupCommands() {
-        // Comando /saldo
+        // Comando /saldo (accesible para todos)
         this.bot.onText(/\/saldo/, async (msg) => {
             const chatId = msg.chat.id;
             const response = await CajaService.obtenerSaldo(chatId);
             this.bot.sendMessage(chatId, response.mensaje, { parse_mode: 'Markdown' });
         });
 
-        // Comando /sup (menú para supervisores)
+        // Comando /sup (menú para supervisores con verificación)
         this.bot.onText(/\/sup/, (msg) => {
             const chatId = msg.chat.id;
             const userId = msg.from.id;
-
-            if (!esSupervisor(userId)) {
-                this.bot.sendMessage(chatId, '❌ ¡Ups! No tienes permiso para acceder al menú de supervisores.');
-                return;
-            }
+            
+            if (!verificarSupervisor(userId, chatId, this.bot)) return;
 
             this.bot.sendMessage(chatId, '🛠️ *Menú de Supervisores*:\nElige una opción:', { 
                 parse_mode: 'Markdown',
@@ -33,11 +31,10 @@ class CommandController {
         });
     }
 
-    // Método para registrar los comandos en BotFather
     async registerCommands() {
         const commands = [
             { command: 'saldo', description: 'Ver saldo actual de la caja' },
-            { command: 'sup', description: 'Menú de supervisores' }
+            { command: 'sup', description: 'Menú de supervisores (acceso restringido)' }
         ];
 
         try {
@@ -49,4 +46,49 @@ class CommandController {
     }
 }
 
-module.exports = CommandController;
+// bot.js - Menú modificado
+const menuOptions = {
+    supervisor: {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '🏁 Iniciar Caja', callback_data: 'iniciarCaja' }],
+                [{ text: '💰 Ver Saldo', callback_data: 'verSaldo' }],
+                [{ text: '📊 Ver Historial', callback_data: 'verHistorial' }],
+                [{ text: '🗑️ Eliminar Caja', callback_data: 'eliminarCaja' }]
+            ]
+        }
+    },
+    usuario: {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '💰 Ver Saldo', callback_data: 'verSaldo' }]
+            ]
+        }
+    }
+};
+
+// Ejemplo de manejo de callbacks
+bot.on('callback_query', async (callbackQuery) => {
+    const chatId = callbackQuery.message.chat.id;
+    const userId = callbackQuery.from.id;
+    const action = callbackQuery.data;
+
+    // Verificar permisos para acciones críticas
+    if (['iniciarCaja', 'eliminarCaja'].includes(action)) {
+        if (!verificarSupervisor(userId, chatId, bot)) return;
+    }
+
+    // Procesar la acción
+    switch (action) {
+        case 'verSaldo':
+            // Accesible para todos
+            const saldo = await CajaService.obtenerSaldo(chatId);
+            bot.sendMessage(chatId, saldo.mensaje);
+            break;
+        case 'iniciarCaja':
+            // Solo supervisores
+            // Implementar lógica
+            break;
+        // ... otros casos
+    }
+});
