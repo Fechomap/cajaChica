@@ -46,28 +46,6 @@ class CommandController {
     }
 }
 
-// bot.js - Menú modificado
-const menuOptions = {
-    supervisor: {
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: '🏁 Iniciar Caja', callback_data: 'iniciarCaja' }],
-                [{ text: '➕ Agregar Dinero', callback_data: 'agregarDinero' }],
-                [{ text: '➖ Restar Dinero', callback_data: 'restarDinero' }],
-                [{ text: '💰 Ver Saldo', callback_data: 'verSaldo' }],
-                [{ text: '🗑️ Eliminar Caja', callback_data: 'eliminarCaja' }]
-            ]
-        }
-    },
-    usuario: {
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: '💰 Ver Saldo', callback_data: 'verSaldo' }]
-            ]
-        }
-    }
-};
-
 // Ejemplo de manejo de callbacks
 bot.on('callback_query', async (callbackQuery) => {
     const chatId = callbackQuery.message.chat.id;
