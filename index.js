@@ -21,7 +21,7 @@ app.post(`/bot${token}`, (req, res) => {
 
 const port = process.env.PORT || 3000;
 
-// Iniciar servidor y configurar servicios
+// Iniciar servidor y configurar servicios//
 const initializeServer = async () => {
     try {
         // Conectar a MongoDB
