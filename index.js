@@ -1,16 +1,19 @@
-// 1. PRIMERO - Importaciones
+// ==========================================
+// 1. CONFIGURACIÓN Y DEPENDENCIAS
+// ==========================================
+// Importaciones necesarias
 require('dotenv').config();
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 
-// 2. SEGUNDO - Configuraciones básicas
+// Variables de entorno y configuración
 const token = process.env.TELEGRAM_TOKEN;
 const url = process.env.APP_URL.replace(/\/$/, '');
 const port = process.env.PORT || 3000;
 
-// 3. TERCERO - Validaciones de variables de entorno
+// Validaciones de variables de entorno
 if (!token) {
     console.error('Error: TELEGRAM_TOKEN no está definido en el archivo .env');
     process.exit(1);
@@ -21,32 +24,28 @@ if (!url) {
     process.exit(1);
 }
 
-// 4. CUARTO - Función de configuración del webhook (agregar ANTES de crear el bot)
+// ==========================================
+// 2. CONFIGURACIÓN DEL WEBHOOK
+// ==========================================
 async function setupWebhook(bot, webhookUrl) {
     try {
         const webhookInfo = await bot.getWebHookInfo();
-        
-        // Añadir log para verificar la URL
         console.log('URL actual del webhook:', webhookInfo.url);
         console.log('URL que intentamos configurar:', webhookUrl);
         
         if (!webhookInfo.url || webhookInfo.url !== webhookUrl) {
             console.log('Configurando webhook...');
-            // Primero eliminar el webhook existente
             await bot.deleteWebHook();
             
-            // Verificar que la URL es válida
             if (!webhookUrl.startsWith('https://')) {
                 throw new Error(`URL del webhook inválida: ${webhookUrl}`);
             }
 
-            // Configurar el nuevo webhook
             await bot.setWebHook(webhookUrl, {
                 max_connections: 100,
                 drop_pending_updates: true
             });
             
-            // Verificar la configuración
             const newWebhookInfo = await bot.getWebHookInfo();
             console.log('Nueva URL del webhook:', newWebhookInfo.url);
             
@@ -61,34 +60,39 @@ async function setupWebhook(bot, webhookUrl) {
     } catch (error) {
         console.error('Error al configurar el webhook:', error);
         console.log('URL que causó el error:', webhookUrl);
-        // Reintento con delay
         console.log('Reintentando en 30 segundos...');
         setTimeout(() => setupWebhook(bot, webhookUrl), 30000);
     }
 }
 
-// 5. QUINTO - Crear el bot
+// ==========================================
+// 3. INICIALIZACIÓN DE SERVICIOS
+// ==========================================
+// Crear instancias de bot y express
 const bot = new TelegramBot(token, { polling: false });
-
-// 6. SEXTO - Configurar Express
 const app = express();
 app.use(bodyParser.json());
 
-// 7. SÉPTIMO - Importar el modelo (mantén esta línea donde ya la tienes)
+// Importar modelo
 const CajaChica = require('./models/CajaChica');
 
-// 8. OCTAVO - Agregar ruta de salud (después de configurar express y antes de la ruta del bot)
+// ==========================================
+// 4. CONFIGURACIÓN DE RUTAS EXPRESS
+// ==========================================
+// Ruta de salud
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// 9. NOVENO - Ruta del webhook (mantén esta parte)
+// Ruta del webhook
 app.post(`/bot${token}`, (req, res) => {
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
 
-// 10. DÉCIMO - Función de inicio del servidor (agregar DESPUÉS de todas las rutas y ANTES de los manejadores de comandos)
+// ==========================================
+// 5. CONFIGURACIÓN DEL SERVIDOR
+// ==========================================
 async function startServer() {
     try {
         await mongoose.connect(process.env.MONGODB_URI);
@@ -98,7 +102,7 @@ async function startServer() {
             console.log(`Servidor escuchando en el puerto ${port}`);
             
             const webhookUrl = `${url}/bot${token}`;
-            console.log('Intentando configurar webhook en:', webhookUrl); // Añadir este log
+            console.log('Intentando configurar webhook en:', webhookUrl);
             setupWebhook(bot, webhookUrl);
             
             setInterval(() => {
@@ -111,7 +115,7 @@ async function startServer() {
     }
 }
 
-// 11. UNDÉCIMO - Manejadores de señales (agregar DESPUÉS de startServer y ANTES de los manejadores de comandos)
+// Manejadores de señales
 process.on('SIGTERM', async () => {
     console.log('Recibida señal SIGTERM, cerrando servidor...');
     await bot.deleteWebHook();
@@ -124,25 +128,26 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 
+// ==========================================
+// 6. CONFIGURACIÓN DE USUARIOS Y ESTADOS
+// ==========================================
+const supervisoresAutorizados = [7143094298, 5660087041];
+let confirmacionesPendientes = {};
 
-// Usuarios autorizados para manipular la caja chica (supervisores)
-const supervisoresAutorizados = [7143094298, 5660087041]; // Reemplaza con los IDs de los supervisores autorizados
-
-// Función para verificar si el usuario es supervisor
 function esSupervisor(userId) {
     return supervisoresAutorizados.includes(userId);
 }
 
-// Objeto para manejar el estado de las confirmaciones pendientes
-let confirmacionesPendientes = {}; // userId: { chatId, tipo, datos }
-
-// Comando /saldo (accesible para todos)
+// ==========================================
+// 7. COMANDOS DEL BOT
+// ==========================================
+// Comando /saldo
 bot.onText(/\/saldo/, (msg) => {
     const chatId = msg.chat.id;
     handleSaldo(chatId, msg.from.id);
 });
 
-// Comando /sup (menú para supervisores)
+// Comando /sup
 bot.onText(/\/sup/, (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
@@ -166,14 +171,15 @@ bot.onText(/\/sup/, (msg) => {
     bot.sendMessage(chatId, '🛠️ *Menú de Supervisores*:\nElige una opción:', { parse_mode: 'Markdown', ...opciones });
 });
 
-// Manejar las interacciones del Inline Keyboard
+// ==========================================
+// 8. MANEJADORES DE CALLBACKS
+// ==========================================
 bot.on('callback_query', (callbackQuery) => {
     const msg = callbackQuery.message;
     const chatId = msg.chat.id;
     const userId = callbackQuery.from.id;
     const data = callbackQuery.data;
 
-    // Acknowledge the callback to remove the loading state
     bot.answerCallbackQuery(callbackQuery.id);
 
     if (data === 'verSaldo') {
@@ -196,7 +202,10 @@ bot.on('callback_query', (callbackQuery) => {
     }
 });
 
-// Función para manejar la opción "Ver Saldo" (accesible para todos)
+// ==========================================
+// 9. FUNCIONES DE MANEJO DE CAJA CHICA
+// ==========================================
+// Ver saldo
 function handleSaldo(chatId, userId) {
     CajaChica.findOne({ chatId })
         .then(caja => {
@@ -204,7 +213,6 @@ function handleSaldo(chatId, userId) {
                 bot.sendMessage(chatId, '⚠️ Primero el supervisor debe iniciar la caja chica.');
                 return;
             }
-
             bot.sendMessage(chatId, `💰 *Saldo Actual*:\n*${caja.saldo.toFixed(2)}* pesos.`, { parse_mode: 'Markdown' });
         })
         .catch(err => {
@@ -213,7 +221,7 @@ function handleSaldo(chatId, userId) {
         });
 }
 
-// Función para iniciar la caja chica (supervisores)
+// Iniciar caja
 function iniciarCaja(chatId, userId) {
     CajaChica.findOne({ chatId })
         .then(caja => {
@@ -221,7 +229,6 @@ function iniciarCaja(chatId, userId) {
                 bot.sendMessage(chatId, '⚠️ La caja chica ya ha sido iniciada y no puede reiniciarse.');
                 return;
             }
-
             bot.sendMessage(chatId, '🏁 *Iniciar Caja Chica*:\nPor favor, ingresa el monto inicial:', { parse_mode: 'Markdown' });
             confirmacionesPendientes[userId] = { chatId, tipo: 'iniciarCaja' };
         })
@@ -231,19 +238,19 @@ function iniciarCaja(chatId, userId) {
         });
 }
 
-// Función para agregar dinero a la caja chica (supervisores)
+// Agregar dinero
 function agregarDinero(chatId, userId) {
     bot.sendMessage(chatId, '➕ *Agregar Dinero*:\n¿Cuánto deseas agregar?', { parse_mode: 'Markdown' });
     confirmacionesPendientes[userId] = { chatId, tipo: 'agregarDinero' };
 }
 
-// Función para restar dinero de la caja chica (supervisores)
+// Restar dinero
 function restarDinero(chatId, userId) {
     bot.sendMessage(chatId, '➖ *Restar Dinero*:\n¿Cuánto deseas restar?', { parse_mode: 'Markdown' });
     confirmacionesPendientes[userId] = { chatId, tipo: 'restarDinero' };
 }
 
-// Confirmar agregar dinero (supervisores)
+// Confirmar agregar dinero
 function confirmarAgregarDinero(chatId, userId) {
     const confirmacion = confirmacionesPendientes[userId];
     if (confirmacion && confirmacion.tipo === 'agregarDinero') {
@@ -275,7 +282,7 @@ function confirmarAgregarDinero(chatId, userId) {
     }
 }
 
-// Confirmar restar dinero (supervisores)
+// Confirmar restar dinero
 function confirmarRestarDinero(chatId, userId) {
     const confirmacion = confirmacionesPendientes[userId];
     if (confirmacion && confirmacion.tipo === 'restarDinero') {
@@ -312,18 +319,23 @@ function confirmarRestarDinero(chatId, userId) {
     }
 }
 
-// Manejar mensajes de entrada (para cantidades y confirmaciones)
+// ==========================================
+// 10. MANEJADOR DE MENSAJES PRINCIPAL
+// ==========================================
 bot.on('message', (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
 
-    // Evitar procesar mensajes de los comandos
+    // Ignorar comandos
     if (msg.text && msg.text.startsWith('/')) return;
 
-    // Manejar confirmaciones pendientes
+    // Procesar confirmaciones pendientes
     if (confirmacionesPendientes[userId]) {
         const { tipo } = confirmacionesPendientes[userId];
 
+        // ==========================================
+        // 11. MANEJO DE INICIALIZACIÓN DE CAJA
+        // ==========================================
         if (tipo === 'iniciarCaja') {
             const montoInicial = parseFloat(msg.text);
             if (isNaN(montoInicial) || montoInicial <= 0) {
@@ -331,7 +343,6 @@ bot.on('message', (msg) => {
                 return;
             }
 
-            // Crear una nueva caja chica en la base de datos
             const nuevaCaja = new CajaChica({ chatId, saldo: montoInicial });
             nuevaCaja.save()
                 .then(() => {
@@ -342,17 +353,20 @@ bot.on('message', (msg) => {
                     console.error('Error al guardar la caja chica:', err);
                     bot.sendMessage(chatId, '❌ Error al iniciar la caja chica.');
                 });
-        } else if (tipo === 'agregarDinero') {
+        } 
+        
+        // ==========================================
+        // 12. MANEJO DE AGREGAR DINERO
+        // ==========================================
+        else if (tipo === 'agregarDinero') {
             const cantidad = parseFloat(msg.text);
             if (isNaN(cantidad) || cantidad <= 0) {
                 bot.sendMessage(chatId, '⚠️ Por favor, ingresa una cantidad válida para agregar.');
                 return;
             }
 
-            // Guardar la cantidad para la confirmación
             confirmacionesPendientes[userId].cantidad = cantidad;
 
-            // Confirmación con botones inline
             const opciones = {
                 reply_markup: {
                     inline_keyboard: [
@@ -366,14 +380,19 @@ bot.on('message', (msg) => {
             };
 
             bot.sendMessage(chatId, `¿Estás seguro de que deseas agregar *$${cantidad.toFixed(2)}* pesos a la caja chica?`, opciones);
-        } else if (tipo === 'restarDinero') {
+        } 
+        
+        // ==========================================
+        // 13. MANEJO DE RESTAR DINERO
+        // ==========================================
+        else if (tipo === 'restarDinero') {
             const cantidad = parseFloat(msg.text);
             if (isNaN(cantidad) || cantidad <= 0) {
                 bot.sendMessage(chatId, '⚠️ Por favor, ingresa una cantidad válida para restar.');
                 return;
             }
 
-            // Buscar el saldo actual antes de confirmar
+            // Verificar saldo antes de confirmar
             CajaChica.findOne({ chatId })
                 .then(caja => {
                     if (!caja) {
@@ -386,10 +405,8 @@ bot.on('message', (msg) => {
                         return;
                     }
 
-                    // Guardar la cantidad para la confirmación
                     confirmacionesPendientes[userId].cantidad = cantidad;
 
-                    // Confirmación con botones inline
                     const opciones = {
                         reply_markup: {
                             inline_keyboard: [
@@ -411,4 +428,8 @@ bot.on('message', (msg) => {
         }
     }
 });
+
+// ==========================================
+// 14. INICIALIZACIÓN DEL SERVIDOR
+// ==========================================
 startServer();
