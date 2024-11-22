@@ -1,39 +1,111 @@
-require('dotenv').config(); // Cargar variables de entorno desde .env
+// 1. PRIMERO - Importaciones
+require('dotenv').config();
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 
-// Usar el token del archivo .env
+// 2. SEGUNDO - Configuraciones básicas
 const token = process.env.TELEGRAM_TOKEN;
+const url = process.env.APP_URL.replace(/\/$/, '');
+const port = process.env.PORT || 3000;
 
-// Construir la URL pública de la aplicación (fija) sin barra al final
-const url = process.env.APP_URL.replace(/\/$/, ''); // Elimina la barra final si existe
-
-if (!url) {
-    console.error('Error: APP_URL no está definido en el archivo .env.');
+// 3. TERCERO - Validaciones de variables de entorno
+if (!token) {
+    console.error('Error: TELEGRAM_TOKEN no está definido en el archivo .env');
     process.exit(1);
 }
 
-const port = process.env.PORT || 3000;
+if (!url) {
+    console.error('Error: APP_URL no está definido en el archivo .env');
+    process.exit(1);
+}
 
-// Crear el bot con polling deshabilitado
+// 4. CUARTO - Función de configuración del webhook (agregar ANTES de crear el bot)
+async function setupWebhook(bot, webhookUrl) {
+    try {
+        const webhookInfo = await bot.getWebHookInfo();
+        
+        if (!webhookInfo.url || webhookInfo.url !== webhookUrl) {
+            console.log('Configurando webhook...');
+            await bot.deleteWebHook();
+            await bot.setWebHook(webhookUrl, {
+                max_connections: 100,
+                drop_pending_updates: true
+            });
+            
+            const newWebhookInfo = await bot.getWebHookInfo();
+            if (newWebhookInfo.url === webhookUrl) {
+                console.log(`Webhook configurado correctamente en: ${webhookUrl}`);
+            } else {
+                throw new Error('La verificación del webhook falló');
+            }
+        } else {
+            console.log('Webhook ya está correctamente configurado');
+        }
+    } catch (error) {
+        console.error('Error al configurar el webhook:', error);
+        console.log('Reintentando en 30 segundos...');
+        setTimeout(() => setupWebhook(bot, webhookUrl), 30000);
+    }
+}
+
+// 5. QUINTO - Crear el bot
 const bot = new TelegramBot(token, { polling: false });
 
-// Inicializar Express
+// 6. SEXTO - Configurar Express
 const app = express();
-
-// Middleware para parsear el cuerpo de las solicitudes
 app.use(bodyParser.json());
 
-// Importar el modelo de CajaChica
+// 7. SÉPTIMO - Importar el modelo (mantén esta línea donde ya la tienes)
 const CajaChica = require('./models/CajaChica');
 
-// Ruta para recibir las actualizaciones de Telegram
+// 8. OCTAVO - Agregar ruta de salud (después de configurar express y antes de la ruta del bot)
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// 9. NOVENO - Ruta del webhook (mantén esta parte)
 app.post(`/bot${token}`, (req, res) => {
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
+
+// 10. DÉCIMO - Función de inicio del servidor (agregar DESPUÉS de todas las rutas y ANTES de los manejadores de comandos)
+async function startServer() {
+    try {
+        await mongoose.connect(process.env.MONGODB_URI);
+        console.log('Conectado a MongoDB');
+
+        app.listen(port, () => {
+            console.log(`Servidor escuchando en el puerto ${port}`);
+            
+            const webhookUrl = `${url}/bot${token}`;
+            setupWebhook(bot, webhookUrl);
+            
+            setInterval(() => {
+                setupWebhook(bot, webhookUrl);
+            }, 3600000);
+        });
+    } catch (error) {
+        console.error('Error al iniciar el servidor:', error);
+        process.exit(1);
+    }
+}
+
+// 11. UNDÉCIMO - Manejadores de señales (agregar DESPUÉS de startServer y ANTES de los manejadores de comandos)
+process.on('SIGTERM', async () => {
+    console.log('Recibida señal SIGTERM, cerrando servidor...');
+    await bot.deleteWebHook();
+    process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+    console.log('Recibida señal SIGINT, cerrando servidor...');
+    await bot.deleteWebHook();
+    process.exit(0);
+});
+
 
 // Usuarios autorizados para manipular la caja chica (supervisores)
 const supervisoresAutorizados = [7143094298, 5660087041]; // Reemplaza con los IDs de los supervisores autorizados
@@ -321,28 +393,4 @@ bot.on('message', (msg) => {
         }
     }
 });
-
-// Conectar a MongoDB y configurar el webhook después de la conexión
-mongoose.connect(process.env.MONGODB_URI)
-    .then(() => {
-        console.log('Conectado a MongoDB');
-
-        // Iniciar el servidor Express
-        app.listen(port, () => {
-            console.log(`Bot de Telegram escuchando en el puerto ${port}`);
-
-            // Configurar el webhook
-            const webhookUrl = `${url}/bot${token}`;
-            bot.setWebHook(webhookUrl)
-                .then(() => {
-                    console.log(`Webhook configurado correctamente: ${webhookUrl}`);
-                })
-                .catch(err => {
-                    console.error('Error al configurar el webhook:', err);
-                });
-        });
-    })
-    .catch(err => {
-        console.error('Error al conectar a MongoDB:', err);
-        process.exit(1); // Salir si no se puede conectar a la base de datos
-    });
+startServer();
