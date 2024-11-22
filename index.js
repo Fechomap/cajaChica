@@ -26,25 +26,42 @@ async function setupWebhook(bot, webhookUrl) {
     try {
         const webhookInfo = await bot.getWebHookInfo();
         
+        // Añadir log para verificar la URL
+        console.log('URL actual del webhook:', webhookInfo.url);
+        console.log('URL que intentamos configurar:', webhookUrl);
+        
         if (!webhookInfo.url || webhookInfo.url !== webhookUrl) {
             console.log('Configurando webhook...');
+            // Primero eliminar el webhook existente
             await bot.deleteWebHook();
+            
+            // Verificar que la URL es válida
+            if (!webhookUrl.startsWith('https://')) {
+                throw new Error(`URL del webhook inválida: ${webhookUrl}`);
+            }
+
+            // Configurar el nuevo webhook
             await bot.setWebHook(webhookUrl, {
                 max_connections: 100,
                 drop_pending_updates: true
             });
             
+            // Verificar la configuración
             const newWebhookInfo = await bot.getWebHookInfo();
+            console.log('Nueva URL del webhook:', newWebhookInfo.url);
+            
             if (newWebhookInfo.url === webhookUrl) {
                 console.log(`Webhook configurado correctamente en: ${webhookUrl}`);
             } else {
                 throw new Error('La verificación del webhook falló');
             }
         } else {
-            console.log('Webhook ya está correctamente configurado');
+            console.log('Webhook ya está correctamente configurado en:', webhookInfo.url);
         }
     } catch (error) {
         console.error('Error al configurar el webhook:', error);
+        console.log('URL que causó el error:', webhookUrl);
+        // Reintento con delay
         console.log('Reintentando en 30 segundos...');
         setTimeout(() => setupWebhook(bot, webhookUrl), 30000);
     }
@@ -81,6 +98,7 @@ async function startServer() {
             console.log(`Servidor escuchando en el puerto ${port}`);
             
             const webhookUrl = `${url}/bot${token}`;
+            console.log('Intentando configurar webhook en:', webhookUrl); // Añadir este log
             setupWebhook(bot, webhookUrl);
             
             setInterval(() => {
