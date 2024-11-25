@@ -7,6 +7,7 @@ const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
+const cron = require('node-cron');
 
 // Variables de entorno y configuración
 const token = process.env.TELEGRAM_TOKEN;
@@ -108,6 +109,10 @@ async function startServer() {
             setInterval(() => {
                 setupWebhook(bot, webhookUrl);
             }, 3600000);
+
+            // Iniciar las tareas programadas
+            scheduleAutomatedMessages();
+            console.log('Mensajes automáticos programados');
         });
     } catch (error) {
         console.error('Error al iniciar el servidor:', error);
@@ -430,6 +435,30 @@ bot.on('message', (msg) => {
 });
 
 // ==========================================
-// 14. INICIALIZACIÓN DEL SERVIDOR
+// 14. CRONE ALERTAS
+// ==========================================
+function scheduleAutomatedMessages() {
+    const schedules = ['0 1 * * *', '0 7 * * *', '0 13 * * *', '0 19 * * *'];
+    const reminder = "Si cuentas con casetas, recuerda subir la foto para proceder con el registro!!! Gracias como siempre!!!";
+
+    schedules.forEach(schedule => {
+        cron.schedule(schedule, async () => {
+            try {
+                const cajas = await CajaChica.find({});
+                for (const caja of cajas) {
+                    await handleSaldo(caja.chatId, null);
+                    await bot.sendMessage(caja.chatId, reminder);
+                }
+            } catch (error) {
+                console.error('Error en el mensaje automatizado:', error);
+            }
+        }, {
+            timezone: "America/Mexico_City"
+        });
+    });
+}
+
+// ==========================================
+// 15. INICIALIZACIÓN DEL SERVIDOR
 // ==========================================
 startServer();
