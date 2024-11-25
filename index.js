@@ -131,7 +131,7 @@ process.on('SIGINT', async () => {
 // ==========================================
 // 6. CONFIGURACIÓN DE USUARIOS Y ESTADOS
 // ==========================================
-const supervisoresAutorizados = [7143094298, 5660087041];
+const supervisoresAutorizados = [7143094298, 6330970125];
 let confirmacionesPendientes = {};
 
 function esSupervisor(userId) {
