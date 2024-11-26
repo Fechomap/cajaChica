@@ -468,9 +468,8 @@ bot.on('message', (msg) => {
 // 14. CRONE ALERTAS
 // ==========================================
 function scheduleAutomatedMessages() {
-    const schedules = ['0 1 * * *', '0 7 * * *', '0 13 * * *', '45 19 * * *'];
-    const reminder = "Si cuentas con casetas, recuerda subir la foto para proceder con el registro!!! Gracias como siempre!!!";
-
+    const schedules = ['0 1 * * *', '0 7 * * *', '0 13 * * *', '02 20 * * *'];
+    
     console.log('Configurando mensajes automáticos para los horarios:', schedules);
 
     schedules.forEach(schedule => {
@@ -480,30 +479,7 @@ function scheduleAutomatedMessages() {
                 const cajas = await CajaChica.find({});
                 console.log(`📊 Encontradas ${cajas.length} cajas para notificar`);
                 
-                for (const caja of cajas) {
-                    try {
-                        console.log(`💬 Enviando mensajes a chat ID: ${caja.chatId}`);
-                        await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar 1 segundo entre mensajes
-                        await handleSaldo(caja.chatId, null);
-                        await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar 1 segundo entre mensajes
-                        await bot.sendMessage(caja.chatId, reminder);
-                        console.log(`✅ Mensajes enviados con éxito a chat ID: ${caja.chatId}`);
-                    } catch (error) {
-                        console.error(`❌ Error enviando mensajes a chat ID ${caja.chatId}:`, error.message);
-                        // Si el chat fue actualizado a supergrupo, actualizar el ID
-                        if (error.response?.parameters?.migrate_to_chat_id) {
-                            const newChatId = error.response.parameters.migrate_to_chat_id;
-                            console.log(`🔄 Actualizando chat ID ${caja.chatId} a ${newChatId}`);
-                            await CajaChica.findOneAndUpdate(
-                                { chatId: caja.chatId },
-                                { chatId: newChatId }
-                            );
-                            // Intentar enviar mensajes al nuevo chat ID
-                            await handleSaldo(newChatId, null);
-                            await bot.sendMessage(newChatId, reminder);
-                        }
-                    }
-                }
+                await enviarMensajesConDelay(cajas);
             } catch (error) {
                 console.error('❌ Error general en el envío de mensajes:', error.message);
             }
@@ -516,15 +492,59 @@ function scheduleAutomatedMessages() {
     console.log('✅ Sistema de mensajes automáticos configurado correctamente');
 }
 
-// Test inmediato (se ejecutará 1 minuto después de iniciar el servidor)
-setTimeout(async () => {
-    console.log('Ejecutando test de mensaje automático...');
-    const cajas = await CajaChica.find({});
-    for (const caja of cajas) {
-        await handleSaldo(caja.chatId, null);
-        await bot.sendMessage(caja.chatId, "Test de mensaje automático - Si cuentas con casetas, recuerda subir la foto para proceder con el registro!!! Gracias como siempre!!!");
+// Función para enviar mensajes con delay
+async function enviarMensajesConDelay(cajas) {
+    console.log(`📊 Iniciando envío de mensajes a ${cajas.length} grupos...`);
+    
+    for (const [index, caja] of cajas.entries()) {
+        try {
+            console.log(`Enviando mensaje ${index + 1}/${cajas.length} al chat ID: ${caja.chatId}`);
+            
+            // Enviar saldo
+            await handleSaldo(caja.chatId, null);
+            
+            // Pequeña pausa entre mensajes al mismo grupo
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Enviar mensaje recordatorio
+            await bot.sendMessage(caja.chatId, 
+                "Si cuentas con casetas, recuerda subir la foto para proceder con el registro!!! Gracias como siempre!!!"
+            );
+            
+            console.log(`✅ Mensajes enviados exitosamente al chat ID: ${caja.chatId}`);
+            
+            // Si no es el último grupo, esperar 10 segundos antes del siguiente
+            if (index < cajas.length - 1) {
+                console.log(`⏳ Esperando 10 segundos para el siguiente grupo...`);
+                await new Promise(resolve => setTimeout(resolve, 10000));
+            }
+            
+        } catch (error) {
+            console.error(`❌ Error enviando mensajes al chat ID ${caja.chatId}:`, error.message);
+            
+            // Si el chat fue actualizado a supergrupo, actualizar el ID
+            if (error.response?.parameters?.migrate_to_chat_id) {
+                const newChatId = error.response.parameters.migrate_to_chat_id;
+                console.log(`🔄 Actualizando chat ID ${caja.chatId} a ${newChatId}`);
+                try {
+                    await CajaChica.findOneAndUpdate(
+                        { chatId: caja.chatId },
+                        { chatId: newChatId }
+                    );
+                    // Intentar enviar mensajes al nuevo chat ID
+                    await handleSaldo(newChatId, null);
+                    await bot.sendMessage(newChatId, 
+                        "Si cuentas con casetas, recuerda subir la foto para proceder con el registro!!! Gracias como siempre!!!"
+                    );
+                } catch (updateError) {
+                    console.error(`Error actualizando/reenviando al nuevo chat ID:`, updateError);
+                }
+            }
+        }
     }
-}, 60000);
+    
+    console.log('✅ Proceso de envío de mensajes completado');
+}
 
 // ==========================================
 // 15. INICIALIZACIÓN DEL SERVIDOR
