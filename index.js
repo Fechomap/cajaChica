@@ -534,7 +534,7 @@ async function enviarMensajesConDelay(cajas) {
                     // Intentar enviar mensajes al nuevo chat ID
                     await handleSaldo(newChatId, null);
                     await bot.sendMessage(newChatId, 
-                        "Si cuentas con casetas 🚧, recuerda subir la foto 📸 para proceder con el registro! Gracias como siempre!✨"
+                        "Si cuenta con casetas 🚧, recuerde subir la foto 📸 para proceder con el registro. Gracias como siempre! ¡Saludos! ✨👋"
                     );
                 } catch (updateError) {
                     console.error(`Error actualizando/reenviando al nuevo chat ID:`, updateError);
