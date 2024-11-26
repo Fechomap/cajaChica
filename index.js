@@ -216,14 +216,42 @@ function handleSaldo(chatId, userId) {
     CajaChica.findOne({ chatId })
         .then(caja => {
             if (!caja) {
-                bot.sendMessage(chatId, '⚠️ Primero el supervisor debe iniciar la caja chica.');
+                bot.sendMessage(chatId, '⚠️ Primero el supervisor debe iniciar la caja chica.')
+                    .catch(error => {
+                        if (error.response && error.response.parameters && error.response.parameters.migrate_to_chat_id) {
+                            // Si el chat se actualizó a supergrupo, actualizar el ID en la base de datos
+                            const newChatId = error.response.parameters.migrate_to_chat_id;
+                            return CajaChica.findOneAndUpdate(
+                                { chatId: chatId },
+                                { chatId: newChatId },
+                                { new: true }
+                            ).then(() => {
+                                return bot.sendMessage(newChatId, '⚠️ Primero el supervisor debe iniciar la caja chica.');
+                            });
+                        }
+                        console.error('Error al enviar mensaje:', error);
+                    });
                 return;
             }
-            bot.sendMessage(chatId, `💰 *Saldo Actual*:\n*${caja.saldo.toFixed(2)}* pesos.`, { parse_mode: 'Markdown' });
+            bot.sendMessage(chatId, `💰 *Saldo Actual*:\n*${caja.saldo.toFixed(2)}* pesos.`, { parse_mode: 'Markdown' })
+                .catch(error => {
+                    if (error.response && error.response.parameters && error.response.parameters.migrate_to_chat_id) {
+                        const newChatId = error.response.parameters.migrate_to_chat_id;
+                        return CajaChica.findOneAndUpdate(
+                            { chatId: chatId },
+                            { chatId: newChatId },
+                            { new: true }
+                        ).then(updatedCaja => {
+                            return bot.sendMessage(newChatId, `💰 *Saldo Actual*:\n*${updatedCaja.saldo.toFixed(2)}* pesos.`, { parse_mode: 'Markdown' });
+                        });
+                    }
+                    console.error('Error al enviar mensaje:', error);
+                });
         })
         .catch(err => {
             console.error('Error al obtener el saldo:', err);
-            bot.sendMessage(chatId, '❌ Error al obtener el saldo.');
+            bot.sendMessage(chatId, '❌ Error al obtener el saldo.')
+                .catch(console.error);
         });
 }
 
@@ -439,42 +467,46 @@ bot.on('message', (msg) => {
 // 14. CRONE ALERTAS
 // ==========================================
 function scheduleAutomatedMessages() {
-    // Probemos con un intervalo de 2 minutos para verificar que funciona
-    const currentTime = new Date();
-    const targetMinute = currentTime.getMinutes() + 2; // 2 minutos después de la hora actual
-    
-    const testSchedule = `${targetMinute} ${currentTime.getHours()} * * *`;
-    console.log(`Programando mensaje para: ${testSchedule}`);
-    
+    const schedules = ['0 1 * * *', '0 7 * * *', '0 13 * * *', '20 19 * * *'];
     const reminder = "Si cuentas con casetas, recuerda subir la foto para proceder con el registro!!! Gracias como siempre!!!";
 
-    cron.schedule(testSchedule, async () => {
-        console.log('=== INICIANDO ENVÍO DE MENSAJES AUTOMÁTICOS ===');
-        console.log(`Hora de ejecución: ${new Date().toLocaleString()}`);
-        
-        try {
-            const cajas = await CajaChica.find({});
-            console.log(`Encontradas ${cajas.length} cajas en la base de datos`);
-            
-            for (const caja of cajas) {
-                console.log(`Intentando enviar mensaje a chat ID: ${caja.chatId}`);
-                try {
-                    await handleSaldo(caja.chatId, null);
-                    await bot.sendMessage(caja.chatId, reminder);
-                    console.log(`✅ Mensaje enviado exitosamente a chat ID: ${caja.chatId}`);
-                } catch (error) {
-                    console.error(`❌ Error enviando mensaje a chat ID ${caja.chatId}:`, error);
-                }
-            }
-        } catch (error) {
-            console.error('Error general en el envío de mensajes:', error);
-        }
-    }, {
-        timezone: "America/Mexico_City",
-        scheduled: true
-    });
+    console.log('Configurando mensajes automáticos para los horarios:', schedules);
 
-    console.log('Sistema de mensajes automáticos configurado');
+    schedules.forEach(schedule => {
+        cron.schedule(schedule, async () => {
+            console.log(`Ejecutando mensaje automático a las ${new Date().toLocaleString()}`);
+            try {
+                const cajas = await CajaChica.find({});
+                console.log(`Encontradas ${cajas.length} cajas para notificar`);
+                
+                for (const caja of cajas) {
+                    try {
+                        await handleSaldo(caja.chatId, null);
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar 1 segundo
+                        await bot.sendMessage(caja.chatId, reminder)
+                            .catch(async error => {
+                                if (error.response?.parameters?.migrate_to_chat_id) {
+                                    const newChatId = error.response.parameters.migrate_to_chat_id;
+                                    await CajaChica.findOneAndUpdate(
+                                        { chatId: caja.chatId },
+                                        { chatId: newChatId }
+                                    );
+                                    await bot.sendMessage(newChatId, reminder);
+                                }
+                            });
+                        console.log(`✅ Mensajes enviados exitosamente a chat ID: ${caja.chatId}`);
+                    } catch (error) {
+                        console.error(`❌ Error enviando mensajes a chat ID ${caja.chatId}:`, error);
+                    }
+                }
+            } catch (error) {
+                console.error('Error general en el envío de mensajes:', error);
+            }
+        }, {
+            timezone: "America/Mexico_City",
+            scheduled: true
+        });
+    });
 }
 
 // Test inmediato (se ejecutará 1 minuto después de iniciar el servidor)
