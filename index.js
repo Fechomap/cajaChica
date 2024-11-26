@@ -468,7 +468,7 @@ bot.on('message', (msg) => {
 // 14. CRONE ALERTAS
 // ==========================================
 function scheduleAutomatedMessages() {
-    const schedules = ['0 1 * * *', '0 7 * * *', '0 13 * * *', '02 20 * * *'];
+    const schedules = ['0 1 * * *', '0 7 * * *', '0 13 * * *', '0 19 * * *'];
     
     console.log('Configurando mensajes automáticos para los horarios:', schedules);
 
@@ -534,7 +534,7 @@ async function enviarMensajesConDelay(cajas) {
                     // Intentar enviar mensajes al nuevo chat ID
                     await handleSaldo(newChatId, null);
                     await bot.sendMessage(newChatId, 
-                        "Si cuentas con casetas, recuerda subir la foto para proceder con el registro!!! Gracias como siempre!!!"
+                        "Si cuentas con casetas 🚧, recuerda subir la foto 📸 para proceder con el registro! Gracias como siempre!✨"
                     );
                 } catch (updateError) {
                     console.error(`Error actualizando/reenviando al nuevo chat ID:`, updateError);
