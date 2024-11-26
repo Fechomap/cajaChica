@@ -3,6 +3,7 @@
 // ==========================================
 // Importaciones necesarias
 require('dotenv').config();
+process.env.TZ = 'America/Mexico_City';
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const bodyParser = require('body-parser');
@@ -438,14 +439,20 @@ bot.on('message', (msg) => {
 // 14. CRONE ALERTAS
 // ==========================================
 function scheduleAutomatedMessages() {
-    const schedules = ['0 1 * * *', '0 7 * * *', '0 13 * * *', '0 19 * * *'];
+    const schedules = ['0 1 * * *', '0 7 * * *', '0 13 * * *', '20 19 * * *'];
     const reminder = "Si cuentas con casetas, recuerda subir la foto para proceder con el registro!!! Gracias como siempre!!!";
+
+    console.log('Configurando mensajes automáticos para los horarios:', schedules);
 
     schedules.forEach(schedule => {
         cron.schedule(schedule, async () => {
+            console.log(`Ejecutando mensaje automático programado para ${new Date().toLocaleString()}`);
             try {
                 const cajas = await CajaChica.find({});
+                console.log(`Encontradas ${cajas.length} cajas para notificar`);
+                
                 for (const caja of cajas) {
+                    console.log(`Enviando mensaje a chat ID: ${caja.chatId}`);
                     await handleSaldo(caja.chatId, null);
                     await bot.sendMessage(caja.chatId, reminder);
                 }
@@ -453,10 +460,21 @@ function scheduleAutomatedMessages() {
                 console.error('Error en el mensaje automatizado:', error);
             }
         }, {
-            timezone: "America/Mexico_City"
+            timezone: "America/Mexico_City",
+            scheduled: true
         });
     });
 }
+
+// Test inmediato (se ejecutará 1 minuto después de iniciar el servidor)
+setTimeout(async () => {
+    console.log('Ejecutando test de mensaje automático...');
+    const cajas = await CajaChica.find({});
+    for (const caja of cajas) {
+        await handleSaldo(caja.chatId, null);
+        await bot.sendMessage(caja.chatId, "Test de mensaje automático - Si cuentas con casetas, recuerda subir la foto para proceder con el registro!!! Gracias como siempre!!!");
+    }
+}, 60000);
 
 // ==========================================
 // 15. INICIALIZACIÓN DEL SERVIDOR
