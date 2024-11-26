@@ -468,7 +468,7 @@ bot.on('message', (msg) => {
 // 14. CRONE ALERTAS
 // ==========================================
 function scheduleAutomatedMessages() {
-    const schedules = ['0 1 * * *', '0 7 * * *', '0 13 * * *', '40 19 * * *'];
+    const schedules = ['0 1 * * *', '0 7 * * *', '0 13 * * *', '45 19 * * *'];
     const reminder = "Si cuentas con casetas, recuerda subir la foto para proceder con el registro!!! Gracias como siempre!!!";
 
     console.log('Configurando mensajes automáticos para los horarios:', schedules);
