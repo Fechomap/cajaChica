@@ -439,31 +439,42 @@ bot.on('message', (msg) => {
 // 14. CRONE ALERTAS
 // ==========================================
 function scheduleAutomatedMessages() {
-    const schedules = ['0 1 * * *', '0 7 * * *', '0 13 * * *', '20 19 * * *'];
+    // Probemos con un intervalo de 2 minutos para verificar que funciona
+    const currentTime = new Date();
+    const targetMinute = currentTime.getMinutes() + 2; // 2 minutos después de la hora actual
+    
+    const testSchedule = `${targetMinute} ${currentTime.getHours()} * * *`;
+    console.log(`Programando mensaje para: ${testSchedule}`);
+    
     const reminder = "Si cuentas con casetas, recuerda subir la foto para proceder con el registro!!! Gracias como siempre!!!";
 
-    console.log('Configurando mensajes automáticos para los horarios:', schedules);
-
-    schedules.forEach(schedule => {
-        cron.schedule(schedule, async () => {
-            console.log(`Ejecutando mensaje automático programado para ${new Date().toLocaleString()}`);
-            try {
-                const cajas = await CajaChica.find({});
-                console.log(`Encontradas ${cajas.length} cajas para notificar`);
-                
-                for (const caja of cajas) {
-                    console.log(`Enviando mensaje a chat ID: ${caja.chatId}`);
+    cron.schedule(testSchedule, async () => {
+        console.log('=== INICIANDO ENVÍO DE MENSAJES AUTOMÁTICOS ===');
+        console.log(`Hora de ejecución: ${new Date().toLocaleString()}`);
+        
+        try {
+            const cajas = await CajaChica.find({});
+            console.log(`Encontradas ${cajas.length} cajas en la base de datos`);
+            
+            for (const caja of cajas) {
+                console.log(`Intentando enviar mensaje a chat ID: ${caja.chatId}`);
+                try {
                     await handleSaldo(caja.chatId, null);
                     await bot.sendMessage(caja.chatId, reminder);
+                    console.log(`✅ Mensaje enviado exitosamente a chat ID: ${caja.chatId}`);
+                } catch (error) {
+                    console.error(`❌ Error enviando mensaje a chat ID ${caja.chatId}:`, error);
                 }
-            } catch (error) {
-                console.error('Error en el mensaje automatizado:', error);
             }
-        }, {
-            timezone: "America/Mexico_City",
-            scheduled: true
-        });
+        } catch (error) {
+            console.error('Error general en el envío de mensajes:', error);
+        }
+    }, {
+        timezone: "America/Mexico_City",
+        scheduled: true
     });
+
+    console.log('Sistema de mensajes automáticos configurado');
 }
 
 // Test inmediato (se ejecutará 1 minuto después de iniciar el servidor)
