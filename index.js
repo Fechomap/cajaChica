@@ -10,6 +10,7 @@ const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const cron = require('node-cron');
 
+
 // Variables de entorno y configuración
 const token = process.env.TELEGRAM_TOKEN;
 const url = process.env.APP_URL.replace(/\/$/, '');
@@ -474,39 +475,45 @@ function scheduleAutomatedMessages() {
 
     schedules.forEach(schedule => {
         cron.schedule(schedule, async () => {
-            console.log(`Ejecutando mensaje automático a las ${new Date().toLocaleString()}`);
+            console.log(`⏰ Ejecutando mensaje programado - ${new Date().toLocaleString()}`);
             try {
                 const cajas = await CajaChica.find({});
-                console.log(`Encontradas ${cajas.length} cajas para notificar`);
+                console.log(`📊 Encontradas ${cajas.length} cajas para notificar`);
                 
                 for (const caja of cajas) {
                     try {
+                        console.log(`💬 Enviando mensajes a chat ID: ${caja.chatId}`);
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar 1 segundo entre mensajes
                         await handleSaldo(caja.chatId, null);
-                        await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar 1 segundo
-                        await bot.sendMessage(caja.chatId, reminder)
-                            .catch(async error => {
-                                if (error.response?.parameters?.migrate_to_chat_id) {
-                                    const newChatId = error.response.parameters.migrate_to_chat_id;
-                                    await CajaChica.findOneAndUpdate(
-                                        { chatId: caja.chatId },
-                                        { chatId: newChatId }
-                                    );
-                                    await bot.sendMessage(newChatId, reminder);
-                                }
-                            });
-                        console.log(`✅ Mensajes enviados exitosamente a chat ID: ${caja.chatId}`);
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar 1 segundo entre mensajes
+                        await bot.sendMessage(caja.chatId, reminder);
+                        console.log(`✅ Mensajes enviados con éxito a chat ID: ${caja.chatId}`);
                     } catch (error) {
-                        console.error(`❌ Error enviando mensajes a chat ID ${caja.chatId}:`, error);
+                        console.error(`❌ Error enviando mensajes a chat ID ${caja.chatId}:`, error.message);
+                        // Si el chat fue actualizado a supergrupo, actualizar el ID
+                        if (error.response?.parameters?.migrate_to_chat_id) {
+                            const newChatId = error.response.parameters.migrate_to_chat_id;
+                            console.log(`🔄 Actualizando chat ID ${caja.chatId} a ${newChatId}`);
+                            await CajaChica.findOneAndUpdate(
+                                { chatId: caja.chatId },
+                                { chatId: newChatId }
+                            );
+                            // Intentar enviar mensajes al nuevo chat ID
+                            await handleSaldo(newChatId, null);
+                            await bot.sendMessage(newChatId, reminder);
+                        }
                     }
                 }
             } catch (error) {
-                console.error('Error general en el envío de mensajes:', error);
+                console.error('❌ Error general en el envío de mensajes:', error.message);
             }
         }, {
             timezone: "America/Mexico_City",
             scheduled: true
         });
     });
+
+    console.log('✅ Sistema de mensajes automáticos configurado correctamente');
 }
 
 // Test inmediato (se ejecutará 1 minuto después de iniciar el servidor)
