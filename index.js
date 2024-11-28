@@ -157,21 +157,26 @@ bot.onText(/\/saldo/, (msg) => {
 // Comando /cuenta
 bot.onText(/\/cuenta/, (msg) => {
     const chatId = msg.chat.id;
-    const mensaje = `*CUENTA:*\n\n`
-        + `*Mi cuenta BBVA:* Alfredo Perez Aguilar\n\n`
-        + `Cuenta: 158 268 0561\n`
-        + `Cuenta CLABE: 012180015826805612\n`
-        + `Código SWIFT: BCMRMXMMPYM\n`
-        + `Tarjeta de débito: 4152 3143 0713 9520`;
+    const mensaje = `*CUENTA BBVA:*\n`
+        + `*Nombre:* \`Alfredo Alejandro Perez Aguilar\`\n\n`
+        + `Cuenta: \`1582680561\`\n`
+        + `CLABE: \`012180015826805612\`\n`
+        + `T débito: \`4152314307139520\``;
     
-    bot.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' })
-        .catch(error => {
-            if (error.response && error.response.parameters && error.response.parameters.migrate_to_chat_id) {
-                const newChatId = error.response.parameters.migrate_to_chat_id;
-                return bot.sendMessage(newChatId, mensaje, { parse_mode: 'Markdown' });
-            }
-            console.error('Error al enviar mensaje:', error);
-        });
+    bot.sendMessage(chatId, mensaje, { 
+        parse_mode: 'Markdown',
+        // Esto permite que el texto en formato código (`) sea seleccionable y copiable
+        disable_web_page_preview: true
+    }).catch(error => {
+        if (error.response && error.response.parameters && error.response.parameters.migrate_to_chat_id) {
+            const newChatId = error.response.parameters.migrate_to_chat_id;
+            return bot.sendMessage(newChatId, mensaje, { 
+                parse_mode: 'Markdown',
+                disable_web_page_preview: true
+            });
+        }
+        console.error('Error al enviar mensaje:', error);
+    });
 });
 
 // Comando /sup
