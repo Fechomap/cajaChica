@@ -157,15 +157,14 @@ bot.onText(/\/saldo/, (msg) => {
 // Comando /cuenta
 bot.onText(/\/cuenta/, (msg) => {
     const chatId = msg.chat.id;
-    const mensaje = `*CUENTA BBVA:*\n`
-        + `*Nombre:* \`Alfredo Alejandro Perez Aguilar\`\n\n`
-        + `Cuenta: \`1582680561\`\n`
-        + `CLABE: \`012180015826805612\`\n`
-        + `T débito: \`4152314307139520\``;
+    const mensaje = `*CUENTA BBVA:*\n\n`
+        + `Nombre: \`\`\`${encodeURIComponent('Alfredo Alejandro Perez Aguilar')}\`\`\`\n\n`
+        + `Cuenta: \`\`\`1582680561\`\`\`\n`
+        + `CLABE: \`\`\`012180015826805612\`\`\`\n`
+        + `T débito: \`\`\`4152314307139520\`\`\``;
     
     bot.sendMessage(chatId, mensaje, { 
         parse_mode: 'Markdown',
-        // Esto permite que el texto en formato código (`) sea seleccionable y copiable
         disable_web_page_preview: true
     }).catch(error => {
         if (error.response && error.response.parameters && error.response.parameters.migrate_to_chat_id) {
