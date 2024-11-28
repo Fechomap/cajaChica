@@ -159,23 +159,23 @@ bot.onText(/\/cuenta/, (msg) => {
     const chatId = msg.chat.id;
 
     // Datos de la cuenta
-    const datosCuenta = `\`\`\`
+    const datosCuenta = `
 CUENTA BBVA:
 
-Nombre: Alfredo Alejandro Perez Aguilar
+Nombre: **Alfredo Alejandro Perez Aguilar**
 
-Cuenta: 1582680561
+Cuenta: **1582680561**
 
-CLABE: 012180015826805612
+CLABE: **012180015826805612**
 
-T débito: 4152314307139520
-\`\`\``;
+T débito: **4152314307139520**
+`;
 
     // Mostrar los datos de la cuenta en Telegram
     bot.sendMessage(chatId, datosCuenta, { parse_mode: 'Markdown' })
         .then(() => {
             // Preguntar si desean enviar a WhatsApp
-            bot.sendMessage(chatId, '¿Deseas enviar estos datos a un número de WhatsApp? Escribe los 10 dígitos del número (sin el prefijo). O escribe "no" para cancelar.')
+            bot.sendMessage(chatId, 'Si Deseas enviar estos datos a un número de WhatsApp Escribe los 10 dígitos del número. O escribe "no" para cancelar.')
                 .then(() => {
                     // Esperar la respuesta del usuario
                     bot.once('message', (response) => {
@@ -214,7 +214,6 @@ T débito: 4152314307139520
             console.error('Error al enviar los datos de la cuenta:', error);
         });
 });
-
 
 // Comando /sup
 bot.onText(/\/sup/, (msg) => {
