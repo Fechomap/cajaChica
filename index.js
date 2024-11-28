@@ -176,7 +176,7 @@ bot.onText(/\/cuenta/, (msg) => {
         }
         console.error('Error al enviar mensaje:', error);
     });
- });
+});
 
 // Comando /sup
 bot.onText(/\/sup/, (msg) => {
