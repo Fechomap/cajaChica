@@ -140,9 +140,30 @@ process.on('SIGINT', async () => {
 // ==========================================
 const supervisoresAutorizados = [7143094298, 6330970125];
 let confirmacionesPendientes = {};
+let esperandoNumeroWhatsApp = new Set();
 
 function esSupervisor(userId) {
     return supervisoresAutorizados.includes(userId);
+}
+
+function generarMensajeCuenta() {
+    return `
+CUENTA BBVA:
+
+**Nombre:** Alfredo Alejandro Perez Aguilar
+
+**Cuenta:** 1582680561
+
+**CLABE:** 012180015826805612
+
+**T débito:** 4152314307139520
+`;
+}
+
+function generarMensajeWhatsApp(numero) {
+    const mensajeWhatsApp = encodeURIComponent(`CUENTA BBVA:\n\nNombre: Alfredo Alejandro Perez Aguilar\nCuenta: 1582680561\nCLABE: 012180015826805612\nT débito: 4152314307139520`);
+    const whatsappUrl = `https://wa.me/52${numero}?text=${mensajeWhatsApp}`;
+    return `✅ Número capturado: **${numero}**\n\n[Abrir chat en WhatsApp](${whatsappUrl})`;
 }
 
 // ==========================================
@@ -157,22 +178,7 @@ bot.onText(/\/saldo/, (msg) => {
 // Comando /cuenta
 bot.onText(/\/cuenta/, (msg) => {
     const chatId = msg.chat.id;
-
-    // Datos de la cuenta con formato en negritas
-    const datosCuenta = `
-CUENTA BBVA:
-
-**Nombre:** Alfredo Alejandro Perez Aguilar
-
-**Cuenta:** 1582680561
-
-**CLABE:** 012180015826805612
-
-**T débito:** 4152314307139520
-`;
-
-    // Mostrar los datos de la cuenta en Telegram con botón para enviar a WhatsApp
-    bot.sendMessage(chatId, datosCuenta, { 
+    bot.sendMessage(chatId, generarMensajeCuenta(), { 
         parse_mode: 'Markdown',
         reply_markup: {
             inline_keyboard: [
@@ -180,34 +186,6 @@ CUENTA BBVA:
             ]
         }
     });
-});
-
-// Manejar el evento cuando se presiona el botón "Enviar a WhatsApp"
-bot.on('callback_query', async (callbackQuery) => {
-    const chatId = callbackQuery.message.chat.id;
-    const data = callbackQuery.data;
-
-    if (data === 'enviar_whatsapp') {
-        // Pedir al usuario el número de WhatsApp
-        bot.sendMessage(chatId, 'Por favor, ingresa el número de WhatsApp a 10 dígitos (sin prefijo):')
-            .then(() => {
-                // Esperar la respuesta del usuario
-                bot.once('message', (response) => {
-                    const numero = response.text.trim();
-
-                    // Validar que sean exactamente 10 dígitos
-                    if (!/^\d{10}$/.test(numero)) {
-                        bot.sendMessage(chatId, '❌ El número ingresado no es válido. Por favor, escribe exactamente 10 dígitos.');
-                        return;
-                    }
-
-                    // Confirmar el número ingresado
-                    bot.sendMessage(chatId, `✅ Número capturado: **${numero}**. ¡Gracias!`, {
-                        parse_mode: 'Markdown'
-                    });
-                });
-            });
-    }
 });
 
 // Comando /sup
@@ -258,11 +236,13 @@ bot.on('callback_query', (callbackQuery) => {
         confirmarAgregarDinero(chatId, userId);
     } else if (data === 'confirmarRestar' && esSupervisor(userId)) {
         confirmarRestarDinero(chatId, userId);
+    } else if (data === 'enviar_whatsapp') {
+        esperandoNumeroWhatsApp.add(chatId);
+        bot.sendMessage(chatId, 'Por favor, ingresa el número de WhatsApp a 10 dígitos (sin prefijo):');
     } else if (data === 'cancelar') {
         bot.sendMessage(chatId, '🚫 Operación cancelada.');
         delete confirmacionesPendientes[userId];
-    } else {
-        bot.sendMessage(chatId, '❌ Opción no válida o no tienes permiso para realizar esta acción.');
+        esperandoNumeroWhatsApp.delete(chatId);
     }
 });
 
@@ -420,6 +400,27 @@ bot.on('message', (msg) => {
 
     // Ignorar comandos
     if (msg.text && msg.text.startsWith('/')) return;
+
+    // Procesar número de WhatsApp si está esperando uno
+    if (esperandoNumeroWhatsApp.has(chatId)) {
+        const numero = msg.text.trim();
+        
+        // Validar que sean exactamente 10 dígitos
+        if (!/^\d{10}$/.test(numero)) {
+            bot.sendMessage(chatId, '❌ El número ingresado no es válido. Por favor, escribe exactamente 10 dígitos.');
+            return;
+        }
+
+        // Enviar confirmación y enlace usando la función auxiliar
+        bot.sendMessage(chatId, generarMensajeWhatsApp(numero), {
+            parse_mode: 'Markdown',
+            disable_web_page_preview: true
+        });
+
+        // Limpiar el estado
+        esperandoNumeroWhatsApp.delete(chatId);
+        return;
+    }
 
     // Procesar confirmaciones pendientes
     if (confirmacionesPendientes[userId]) {
