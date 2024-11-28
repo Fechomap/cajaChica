@@ -508,7 +508,7 @@ async function enviarMensajesConDelay(cajas) {
             
             // Enviar mensaje recordatorio
             await bot.sendMessage(caja.chatId, 
-                "Si cuenta con casetas 🚧, enviame la foto la foto 📸, al PERSONAL para proceder con el registro. Gracias como siempre! ¡Saludos! ✨👋"
+                "Si cuenta con casetas 🚧, enviame la foto 📸, al chat PERSONAL para proceder con el registro. Gracias como siempre! ¡Saludos! ✨👋"
             );
             
             console.log(`✅ Mensajes enviados exitosamente al chat ID: ${caja.chatId}`);
