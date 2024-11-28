@@ -161,17 +161,18 @@ CUENTA BBVA:
 }
 
 function generarMensajeWhatsApp(numero) {
-    // Mensaje con formato monoespaciado
-    const mensajeWhatsApp = encodeURIComponent(
-        `\`\`\`
+    // Mensaje con formato monoespaciado y doble salto de línea
+    const mensajeWhatsApp = encodeURIComponent(`\`\`\`
 CUENTA BBVA:
 
 Nombre: Alfredo Alejandro Perez Aguilar
+
 Cuenta: 1582680561
+
 CLABE: 012180015826805612
+
 T débito: 4152314307139520
-\`\`\``
-    );
+\`\`\``);
 
     // Generar el enlace de WhatsApp
     const whatsappUrl = `https://wa.me/52${numero}?text=${mensajeWhatsApp}`;
@@ -196,7 +197,7 @@ bot.onText(/\/cuenta/, (msg) => {
         parse_mode: 'Markdown',
         reply_markup: {
             inline_keyboard: [
-                [{ text: "Enviar a WhatsApp 📤", callback_data: 'enviar_whatsapp' }]
+                [{ text: "Enviar a WhatsApp 📦", callback_data: 'enviar_whatsapp' }]
             ]
         }
     });
