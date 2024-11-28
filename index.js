@@ -157,7 +157,9 @@ bot.onText(/\/saldo/, (msg) => {
 // Comando /cuenta
 bot.onText(/\/cuenta/, (msg) => {
     const chatId = msg.chat.id;
-    const mensaje = `\`\`\`
+
+    // Datos de la cuenta
+    const datosCuenta = `\`\`\`
 CUENTA BBVA:
 
 Nombre: Alfredo Alejandro Perez Aguilar
@@ -168,22 +170,46 @@ CLABE: 012180015826805612
 
 T débito: 4152314307139520
 \`\`\``;
-    
-    bot.sendMessage(chatId, mensaje, { 
-        parse_mode: 'Markdown',
-        disable_web_page_preview: true
-    }).catch(error => {
-        if (error.response && error.response.parameters && error.response.parameters.migrate_to_chat_id) {
-            const newChatId = error.response.parameters.migrate_to_chat_id;
-            return bot.sendMessage(newChatId, mensaje, { 
-                parse_mode: 'Markdown',
-                disable_web_page_preview: true
-            });
-        }
-        console.error('Error al enviar mensaje:', error);
-    });
-});
 
+    // Mostrar los datos de la cuenta en Telegram
+    bot.sendMessage(chatId, datosCuenta, { parse_mode: 'Markdown' })
+        .then(() => {
+            // Preguntar si desean enviar a WhatsApp
+            bot.sendMessage(chatId, '¿Deseas enviar estos datos a un número de WhatsApp? Escribe los 10 dígitos del número (sin el prefijo). O escribe "no" para cancelar.')
+                .then(() => {
+                    // Esperar la respuesta del usuario
+                    bot.once('message', (response) => {
+                        const respuesta = response.text.trim();
+
+                        // Manejar si el usuario responde "no"
+                        if (respuesta.toLowerCase() === 'no') {
+                            bot.sendMessage(chatId, '👌 Entendido. Los datos no se enviarán a WhatsApp.');
+                            return;
+                        }
+
+                        // Validar que sean exactamente 10 dígitos
+                        if (!/^\d{10}$/.test(respuesta)) {
+                            bot.sendMessage(chatId, '❌ El número ingresado no es válido. Por favor, escribe exactamente 10 dígitos.');
+                            return;
+                        }
+
+                        // Construir el número completo con prefijo +52
+                        const numeroWhatsApp = `+52${respuesta}`;
+
+                        // Generar enlace de WhatsApp
+                        const enlaceWhatsApp = `https://wa.me/${numeroWhatsApp}?text=${encodeURIComponent(datosCuenta)}`;
+
+                        // Enviar enlace al chat de Telegram
+                        bot.sendMessage(chatId, `✅ Haz clic en el siguiente enlace para enviar los datos a WhatsApp:\n\n${enlaceWhatsApp}`, {
+                            disable_web_page_preview: true
+                        });
+                    });
+                });
+        })
+        .catch((error) => {
+            console.error('Error al enviar los datos de la cuenta:', error);
+        });
+});
 
 // Comando /sup
 bot.onText(/\/sup/, (msg) => {
