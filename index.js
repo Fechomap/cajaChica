@@ -158,11 +158,11 @@ bot.onText(/\/saldo/, (msg) => {
 bot.onText(/\/cuenta/, (msg) => {
     const chatId = msg.chat.id;
     const mensaje = `*CUENTA:*\n\n`
-        + ```*Mi cuenta BBVA:* Alfredo Perez Aguilar\n\n
-        + Cuenta: 1582680561\n
-        + Cuenta CLABE: 012180015826805612\n
-        + Código SWIFT: BCMRMXMMPYM\n
-        + Tarjeta de débito: 4152314307139520```;
+        + `*Mi cuenta BBVA:* Alfredo Perez Aguilar\n\n`
+        + `Cuenta: 158 268 0561\n`
+        + `Cuenta CLABE: 012180015826805612\n`
+        + `Código SWIFT: BCMRMXMMPYM\n`
+        + `Tarjeta de débito: 4152 3143 0713 9520`;
     
     bot.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' })
         .catch(error => {
