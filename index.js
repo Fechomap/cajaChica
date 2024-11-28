@@ -161,9 +161,23 @@ CUENTA BBVA:
 }
 
 function generarMensajeWhatsApp(numero) {
-    const mensajeWhatsApp = encodeURIComponent(`CUENTA BBVA:\n\nNombre: Alfredo Alejandro Perez Aguilar\nCuenta: 1582680561\nCLABE: 012180015826805612\nT débito: 4152314307139520`);
+    // Mensaje con formato monoespaciado
+    const mensajeWhatsApp = encodeURIComponent(
+        `\`\`\`
+CUENTA BBVA:
+
+Nombre: Alfredo Alejandro Perez Aguilar
+Cuenta: 1582680561
+CLABE: 012180015826805612
+T débito: 4152314307139520
+\`\`\``
+    );
+
+    // Generar el enlace de WhatsApp
     const whatsappUrl = `https://wa.me/52${numero}?text=${mensajeWhatsApp}`;
-    return `✅ Número capturado: **${numero}**\n\n[Abrir chat en WhatsApp](${whatsappUrl})`;
+
+    // Mensaje que se mostrará en Telegram
+    return `✅ Número capturado: **${numero}**\n\n[Enviar datos a WhatsApp](${whatsappUrl})`;
 }
 
 // ==========================================
@@ -238,7 +252,7 @@ bot.on('callback_query', (callbackQuery) => {
         confirmarRestarDinero(chatId, userId);
     } else if (data === 'enviar_whatsapp') {
         esperandoNumeroWhatsApp.add(chatId);
-        bot.sendMessage(chatId, 'Por favor, ingresa el número de WhatsApp a 10 dígitos (sin prefijo):');
+        bot.sendMessage(chatId, 'Por favor, ingresa el número de WhatsApp a 10 dígitos📱.');
     } else if (data === 'cancelar') {
         bot.sendMessage(chatId, '🚫 Operación cancelada.');
         delete confirmacionesPendientes[userId];
