@@ -158,61 +158,56 @@ bot.onText(/\/saldo/, (msg) => {
 bot.onText(/\/cuenta/, (msg) => {
     const chatId = msg.chat.id;
 
-    // Datos de la cuenta
+    // Datos de la cuenta con formato en negritas
     const datosCuenta = `
 CUENTA BBVA:
 
-Nombre: **Alfredo Alejandro Perez Aguilar**
+**Nombre:** Alfredo Alejandro Perez Aguilar
 
-Cuenta: **1582680561**
+**Cuenta:** 1582680561
 
-CLABE: **012180015826805612**
+**CLABE:** 012180015826805612
 
-T débito: **4152314307139520**
+**T débito:** 4152314307139520
 `;
 
-    // Mostrar los datos de la cuenta en Telegram
-    bot.sendMessage(chatId, datosCuenta, { parse_mode: 'Markdown' })
-        .then(() => {
-            // Preguntar si desean enviar a WhatsApp
-            bot.sendMessage(chatId, 'Si Deseas enviar estos datos a un número de WhatsApp Escribe los 10 dígitos del número. O escribe "no" para cancelar.')
-                .then(() => {
-                    // Esperar la respuesta del usuario
-                    bot.once('message', (response) => {
-                        const respuesta = response.text.trim();
+    // Mostrar los datos de la cuenta en Telegram con botón para enviar a WhatsApp
+    bot.sendMessage(chatId, datosCuenta, { 
+        parse_mode: 'Markdown',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "Enviar a WhatsApp 📤", callback_data: 'enviar_whatsapp' }]
+            ]
+        }
+    });
+});
 
-                        // Manejar si el usuario responde "no"
-                        if (respuesta.toLowerCase() === 'no') {
-                            bot.sendMessage(chatId, '👌 Entendido. Los datos no se enviarán a WhatsApp.');
-                            return;
-                        }
+// Manejar el evento cuando se presiona el botón "Enviar a WhatsApp"
+bot.on('callback_query', async (callbackQuery) => {
+    const chatId = callbackQuery.message.chat.id;
+    const data = callbackQuery.data;
 
-                        // Validar que sean exactamente 10 dígitos
-                        if (!/^\d{10}$/.test(respuesta)) {
-                            bot.sendMessage(chatId, '❌ El número ingresado no es válido. Por favor, escribe exactamente 10 dígitos.');
-                            return;
-                        }
+    if (data === 'enviar_whatsapp') {
+        // Pedir al usuario el número de WhatsApp
+        bot.sendMessage(chatId, 'Por favor, ingresa el número de WhatsApp a 10 dígitos (sin prefijo):')
+            .then(() => {
+                // Esperar la respuesta del usuario
+                bot.once('message', (response) => {
+                    const numero = response.text.trim();
 
-                        // Construir el número completo con prefijo +52
-                        const numeroWhatsApp = `+52${respuesta}`;
+                    // Validar que sean exactamente 10 dígitos
+                    if (!/^\d{10}$/.test(numero)) {
+                        bot.sendMessage(chatId, '❌ El número ingresado no es válido. Por favor, escribe exactamente 10 dígitos.');
+                        return;
+                    }
 
-                        // Generar enlace de WhatsApp
-                        const enlaceWhatsApp = `https://wa.me/${numeroWhatsApp}?text=${encodeURIComponent(datosCuenta)}`;
-
-                        // Enviar mensaje con un botón amigable
-                        bot.sendMessage(chatId, '✅ Haz clic en el siguiente botón para enviar los datos a WhatsApp:', {
-                            reply_markup: {
-                                inline_keyboard: [
-                                    [{ text: "Enviar cuenta a WhatsApp 📤", url: enlaceWhatsApp }]
-                                ]
-                            }
-                        });
+                    // Confirmar el número ingresado
+                    bot.sendMessage(chatId, `✅ Número capturado: **${numero}**. ¡Gracias!`, {
+                        parse_mode: 'Markdown'
                     });
                 });
-        })
-        .catch((error) => {
-            console.error('Error al enviar los datos de la cuenta:', error);
-        });
+            });
+    }
 });
 
 // Comando /sup
