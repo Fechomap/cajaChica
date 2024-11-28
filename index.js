@@ -506,14 +506,16 @@ async function enviarMensajesConDelay(cajas) {
             // Pequeña pausa entre mensajes al mismo grupo
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // Enviar mensaje recordatorio
-            await bot.sendMessage(caja.chatId, 
-                "Si cuenta con casetas 🚧, enviame la foto 📸, al chat PERSONAL para proceder con el registro. Gracias como siempre! ¡Saludos! ✨👋"
-            );
+            // Mensaje con formato monoespaciado
+            const mensaje = 
+                '`- Si cuenta con casetas 🚧 o algún gasto por reportar...\n\n' +
+                '- Envieme la foto 📸, o la información correspondiente al chat PERSONAL para proceder con el registro de las mismas.\n\n' +
+                '- Gracias como siempre! ¡Saludos! ✨👋`';
+            
+            await bot.sendMessage(caja.chatId, mensaje, { parse_mode: 'Markdown' });
             
             console.log(`✅ Mensajes enviados exitosamente al chat ID: ${caja.chatId}`);
             
-            // Si no es el último grupo, esperar 10 segundos antes del siguiente
             if (index < cajas.length - 1) {
                 console.log(`⏳ Esperando 10 segundos para el siguiente grupo...`);
                 await new Promise(resolve => setTimeout(resolve, 10000));
@@ -522,7 +524,6 @@ async function enviarMensajesConDelay(cajas) {
         } catch (error) {
             console.error(`❌ Error enviando mensajes al chat ID ${caja.chatId}:`, error.message);
             
-            // Si el chat fue actualizado a supergrupo, actualizar el ID
             if (error.response?.parameters?.migrate_to_chat_id) {
                 const newChatId = error.response.parameters.migrate_to_chat_id;
                 console.log(`🔄 Actualizando chat ID ${caja.chatId} a ${newChatId}`);
@@ -531,11 +532,15 @@ async function enviarMensajesConDelay(cajas) {
                         { chatId: caja.chatId },
                         { chatId: newChatId }
                     );
-                    // Intentar enviar mensajes al nuevo chat ID
                     await handleSaldo(newChatId, null);
-                    await bot.sendMessage(newChatId, 
-                        "Si cuenta con casetas 🚧, recuerde subir la foto 📸 para proceder con el registro. Gracias como siempre! ¡Saludos! ✨👋"
-                    );
+                    
+                    // Usar el mismo mensaje monoespaciado
+                    const mensaje = 
+                        '`- Si cuenta con casetas 🚧 o algún gasto por reportar...\n\n' +
+                        '- Envieme la foto 📸, o la información correspondiente al chat PERSONAL para proceder con el registro de las mismas.\n\n' +
+                        '- Gracias como siempre! ¡Saludos! ✨👋`';
+                    
+                    await bot.sendMessage(newChatId, mensaje, { parse_mode: 'Markdown' });
                 } catch (updateError) {
                     console.error(`Error actualizando/reenviando al nuevo chat ID:`, updateError);
                 }
