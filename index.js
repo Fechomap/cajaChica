@@ -199,9 +199,13 @@ T débito: 4152314307139520
                         // Generar enlace de WhatsApp
                         const enlaceWhatsApp = `https://wa.me/${numeroWhatsApp}?text=${encodeURIComponent(datosCuenta)}`;
 
-                        // Enviar enlace al chat de Telegram
-                        bot.sendMessage(chatId, `✅ Haz clic en el siguiente enlace para enviar los datos a WhatsApp:\n\n${enlaceWhatsApp}`, {
-                            disable_web_page_preview: true
+                        // Enviar mensaje con un botón amigable
+                        bot.sendMessage(chatId, '✅ Haz clic en el siguiente botón para enviar los datos a WhatsApp:', {
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [{ text: "Enviar cuenta a WhatsApp 📤", url: enlaceWhatsApp }]
+                                ]
+                            }
                         });
                     });
                 });
@@ -210,6 +214,7 @@ T débito: 4152314307139520
             console.error('Error al enviar los datos de la cuenta:', error);
         });
 });
+
 
 // Comando /sup
 bot.onText(/\/sup/, (msg) => {
