@@ -253,7 +253,7 @@ bot.on('callback_query', (callbackQuery) => {
         confirmarRestarDinero(chatId, userId);
     } else if (data === 'enviar_whatsapp') {
         esperandoNumeroWhatsApp.add(chatId);
-        bot.sendMessage(chatId, 'Por favor, ingresa el número de WhatsApp a 10 dígitos📱.');
+        bot.sendMessage(chatId, 'Por favor, ingresa el número de WhatsApp a 10 dígitos📱\n\nSi ingresas un número inválido, deberás usar /cuenta para intentar nuevamente.');
     } else if (data === 'cancelar') {
         bot.sendMessage(chatId, '🚫 Operación cancelada.');
         delete confirmacionesPendientes[userId];
@@ -422,7 +422,9 @@ bot.on('message', (msg) => {
         
         // Validar que sean exactamente 10 dígitos
         if (!/^\d{10}$/.test(numero)) {
-            bot.sendMessage(chatId, '❌ El número ingresado no es válido. Por favor, escribe exactamente 10 dígitos.');
+            bot.sendMessage(chatId, '❌ El número ingresado no es válido.\nUsa /cuenta para intentar nuevamente.');
+            // Limpiar el estado inmediatamente
+            esperandoNumeroWhatsApp.delete(chatId);
             return;
         }
 
