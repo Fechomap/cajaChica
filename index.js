@@ -262,7 +262,7 @@ bot.on('callback_query', (callbackQuery) => {
 });
 
 // ==========================================
-// 9. FUNCIONES DE MANEJO DE CAJA CHICA
+// 9. FUNCIONES DE MANEJO DE CAJA CHICA.
 // ==========================================
 // Ver saldo
 function handleSaldo(chatId, userId) {
