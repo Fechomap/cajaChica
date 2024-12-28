@@ -28,7 +28,7 @@ if (!url) {
 }
 
 // ==========================================
-// 2. CONFIGURACIÓN DEL WEBHOOK
+// 2. CONFIGURACIÓN DEL WEBHOOK.
 // ==========================================
 async function setupWebhook(bot, webhookUrl) {
     try {
