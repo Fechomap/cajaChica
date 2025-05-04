@@ -35,41 +35,55 @@ if (!url) {
 // ==========================================
 // 2. CONFIGURACIÓN DEL WEBHOOK
 // ==========================================
-async function setupWebhook(bot, webhookUrl) {
+async function setupWebhook(botInstance, webhookUrl) {
     try {
-        const webhookInfo = await bot.getWebHookInfo();
-        console.log('URL actual del webhook:', webhookInfo.url);
-        console.log('URL que intentamos configurar:', webhookUrl);
+        const webhookInfo = await botInstance.getWebHookInfo();
+        console.log('🔍 Webhook info antes de configurar:', JSON.stringify(webhookInfo, null, 2));
         
         if (!webhookInfo.url || webhookInfo.url !== webhookUrl) {
-            console.log('Configurando webhook...');
-            await bot.deleteWebHook();
+            console.log('⚠️ Webhook diferente o vacío. Configurando...');
+            
+            // Elimina el webhook existente con debug
+            console.log('🔄 Eliminando webhook actual...');
+            const deleteResult = await botInstance.deleteWebHook();
+            console.log('🔄 Resultado de eliminar webhook:', deleteResult);
+            
+            // Espera un momento para asegurarse de que Telegram procese la eliminación
+            await new Promise(resolve => setTimeout(resolve, 1000));
             
             if (!webhookUrl.startsWith('https://')) {
                 throw new Error(`URL del webhook inválida: ${webhookUrl}`);
             }
 
-            await bot.setWebHook(webhookUrl, {
+            console.log('✨ Configurando nuevo webhook con URL:', webhookUrl);
+            
+            // Intenta configurar con más opciones y debug
+            const setWebhookResult = await botInstance.setWebHook(webhookUrl, {
                 max_connections: 100,
                 drop_pending_updates: true
             });
             
-            const newWebhookInfo = await bot.getWebHookInfo();
-            console.log('Nueva URL del webhook:', newWebhookInfo.url);
+            console.log('✅ Resultado de setWebHook:', setWebhookResult);
+            
+            // Verifica inmediatamente después de configurar
+            const newWebhookInfo = await botInstance.getWebHookInfo();
+            console.log('🔍 Webhook info DESPUÉS de configurar:', JSON.stringify(newWebhookInfo, null, 2));
             
             if (newWebhookInfo.url === webhookUrl) {
-                console.log(`Webhook configurado correctamente en: ${webhookUrl}`);
+                console.log(`✅ Webhook configurado correctamente en: ${webhookUrl}`);
             } else {
-                throw new Error('La verificación del webhook falló');
+                throw new Error(`La verificación del webhook falló. URL esperada: ${webhookUrl}, URL actual: ${newWebhookInfo.url}`);
             }
         } else {
-            console.log('Webhook ya está correctamente configurado en:', webhookInfo.url);
+            console.log('✅ Webhook ya está correctamente configurado en:', webhookInfo.url);
         }
     } catch (error) {
-        console.error('Error al configurar el webhook:', error);
+        console.error('❌ Error al configurar el webhook:', error);
+        console.log('🔍 Error detallado:', error.message);
+        console.log('🔍 Stack trace:', error.stack);
         console.log('URL que causó el error:', webhookUrl);
         console.log('Reintentando en 30 segundos...');
-        setTimeout(() => setupWebhook(bot, webhookUrl), 30000);
+        setTimeout(() => setupWebhook(botInstance, webhookUrl), 30000);
     }
 }
 
@@ -657,4 +671,29 @@ async function enviarMensajesConDelay(cajas) {
 // ==========================================
 // 15. INICIALIZACIÓN DEL SERVIDOR
 // ==========================================
+// ==========================================
+// FUNCIÓN ALTERNATIVA PARA CONFIGURAR WEBHOOK (Método directo con axios)
+// ==========================================
+async function setupWebhookAlternative(token, webhookUrl) {
+    try {
+        const axios = require('axios');
+        
+        // Primero, veamos qué responde la API directamente
+        const response = await axios.post(`https://api.telegram.org/bot${token}/setWebhook`, {
+            url: webhookUrl,
+            max_connections: 100,
+            drop_pending_updates: true
+        });
+        
+        console.log('🔧 Respuesta directa de setWebhook:', JSON.stringify(response.data, null, 2));
+        
+        // Verificar el estado del webhook
+        const checkResponse = await axios.post(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+        console.log('🔧 Respuesta directa de getWebhookInfo:', JSON.stringify(checkResponse.data, null, 2));
+        
+    } catch (error) {
+        console.error('❌ Error con método alternativo:', error.message);
+    }
+}
+
 startServer();
