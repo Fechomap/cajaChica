@@ -19,16 +19,33 @@ const port = process.env.PORT || 3000;
 
 // Variables de entorno y configuración
 const token = process.env.TELEGRAM_TOKEN;
-const url = process.env.APP_URL.replace(/\/$/, '');
+
+// Función auxiliar para obtener la URL del webhook de forma centralizada
+function getWebhookUrl(token) {
+  let rawUrl = process.env.RAILWAY_PUBLIC_DOMAIN 
+            || process.env.RAILWAY_STATIC_URL 
+            || process.env.APP_URL;
+  if (!rawUrl) {
+    console.error('Error: No se pudo determinar la URL del webhook. Revisa variables de entorno.');
+    process.exit(1);
+  }
+  rawUrl = rawUrl.replace(/\/$/, '');
+  // Si es RAILWAY_PUBLIC_DOMAIN o RAILWAY_STATIC_URL, asegurar https://
+  if (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL) {
+    if (!/^https?:\/\//.test(rawUrl)) {
+      rawUrl = `https://${rawUrl}`;
+    }
+  }
+  return `${rawUrl}/bot${token}`;
+}
 
 // Validaciones de variables de entorno
 if (!token) {
     console.error('Error: TELEGRAM_TOKEN no está definido en el archivo .env');
     process.exit(1);
 }
-
-if (!url) {
-    console.error('Error: APP_URL no está definido en el archivo .env');
+if (isProduction && !process.env.MONGODB_URI) {
+    console.error('Error: MONGODB_URI no está definido en producción');
     process.exit(1);
 }
 
@@ -129,15 +146,7 @@ async function startServer() {
         console.log('Conectado a MongoDB');
 
         if (isProduction) {
-            // Railway puede proporcionar la URL en variables de entorno
-            let webhookUrl;
-            if (process.env.APP_URL) {
-                webhookUrl = `${process.env.APP_URL.replace(/\/$/, '')}/bot${token}`;
-            } else if (process.env.RAILWAY_PUBLIC_DOMAIN) {
-                webhookUrl = `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/bot${token}`;
-            } else {
-                webhookUrl = `${url}/bot${token}`;
-            }
+            const webhookUrl = getWebhookUrl(token);
             app.listen(port, () => {
                 console.log(`Servidor escuchando en el puerto ${port}`);
                 console.log('Intentando configurar webhook en:', webhookUrl);
