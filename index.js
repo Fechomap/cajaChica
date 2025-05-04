@@ -6,15 +6,20 @@ require('dotenv').config();
 process.env.TZ = 'America/Mexico_City';
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
-const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const cron = require('node-cron');
+
+let bot;
+let app;
+
+// Detectar entorno
+const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_ID;
+const port = process.env.PORT || 3000;
 
 
 // Variables de entorno y configuración
 const token = process.env.TELEGRAM_TOKEN;
 const url = process.env.APP_URL.replace(/\/$/, '');
-const port = process.env.PORT || 3000;
 
 // Validaciones de variables de entorno
 if (!token) {
@@ -72,9 +77,15 @@ async function setupWebhook(bot, webhookUrl) {
 // 3. INICIALIZACIÓN DE SERVICIOS
 // ==========================================
 // Crear instancias de bot y express
-const bot = new TelegramBot(token, { polling: false });
-const app = express();
-app.use(bodyParser.json());
+if (isProduction) {
+    console.log('🌐 Iniciando en modo PRODUCCIÓN (Railway) - Usando Webhook');
+    bot = new TelegramBot(token, { polling: false });
+    app = express();
+    app.use(express.json());
+} else {
+    console.log('💻 Iniciando en modo DESARROLLO (Local) - Usando Polling');
+    bot = new TelegramBot(token, { polling: true });
+}
 
 // Importar modelo
 const CajaChica = require('./models/CajaChica');
@@ -82,16 +93,18 @@ const CajaChica = require('./models/CajaChica');
 // ==========================================
 // 4. CONFIGURACIÓN DE RUTAS EXPRESS
 // ==========================================
-// Ruta de salud
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
-});
+if (isProduction) {
+  // Ruta de salud
+  app.get('/health', (req, res) => {
+      res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+  });
 
-// Ruta del webhook
-app.post(`/bot${token}`, (req, res) => {
-    bot.processUpdate(req.body);
-    res.sendStatus(200);
-});
+  // Ruta del webhook
+  app.post(`/bot${token}`, (req, res) => {
+      bot.processUpdate(req.body);
+      res.sendStatus(200);
+  });
+}
 
 // ==========================================
 // 5. CONFIGURACIÓN DEL SERVIDOR
@@ -101,21 +114,32 @@ async function startServer() {
         await mongoose.connect(process.env.MONGODB_URI);
         console.log('Conectado a MongoDB');
 
-        app.listen(port, () => {
-            console.log(`Servidor escuchando en el puerto ${port}`);
-            
-            const webhookUrl = `${url}/bot${token}`;
-            console.log('Intentando configurar webhook en:', webhookUrl);
-            setupWebhook(bot, webhookUrl);
-            
-            setInterval(() => {
+        if (isProduction) {
+            // Railway puede proporcionar la URL en variables de entorno
+            let webhookUrl;
+            if (process.env.APP_URL) {
+                webhookUrl = `${process.env.APP_URL.replace(/\/$/, '')}/bot${token}`;
+            } else if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+                webhookUrl = `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/bot${token}`;
+            } else {
+                webhookUrl = `${url}/bot${token}`;
+            }
+            app.listen(port, () => {
+                console.log(`Servidor escuchando en el puerto ${port}`);
+                console.log('Intentando configurar webhook en:', webhookUrl);
                 setupWebhook(bot, webhookUrl);
-            }, 3600000);
-
-            // Iniciar las tareas programadas
+                setInterval(() => {
+                    setupWebhook(bot, webhookUrl);
+                }, 3600000);
+                // Iniciar las tareas programadas
+                scheduleAutomatedMessages();
+                console.log('Mensajes automáticos programados');
+            });
+        } else {
+            // Local (polling)
             scheduleAutomatedMessages();
             console.log('Mensajes automáticos programados');
-        });
+        }
     } catch (error) {
         console.error('Error al iniciar el servidor:', error);
         process.exit(1);
@@ -125,13 +149,17 @@ async function startServer() {
 // Manejadores de señales
 process.on('SIGTERM', async () => {
     console.log('Recibida señal SIGTERM, cerrando servidor...');
-    await bot.deleteWebHook();
+    if (isProduction) {
+        await bot.deleteWebHook();
+    }
     process.exit(0);
 });
 
 process.on('SIGINT', async () => {
     console.log('Recibida señal SIGINT, cerrando servidor...');
-    await bot.deleteWebHook();
+    if (isProduction) {
+        await bot.deleteWebHook();
+    }
     process.exit(0);
 });
 
