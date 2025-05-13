@@ -39,6 +39,23 @@ const messageHandler = {
         return;
       }
 
+      // NUEVO: Procesar conceptos de gasto pendientes
+      if (supervisorController.state.waitingForConcept && 
+          supervisorController.state.waitingForConcept[userId]) {
+        const concepto = msg.text.trim();
+        
+        if (!concepto || concepto.length < 3) {
+          await telegramService.sendSafeMessage(
+            chatId,
+            '⚠️ Por favor, ingresa una descripción válida para el gasto (mínimo 3 caracteres).'
+          );
+          return;
+        }
+        
+        await supervisorController.processConceptAndUpdateSaldo(chatId, userId, concepto);
+        return;
+      }
+
       // Procesar confirmaciones pendientes
       const confirmation = supervisorController.state.pendingConfirmations[userId];
       if (confirmation) {

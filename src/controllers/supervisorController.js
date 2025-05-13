@@ -6,7 +6,8 @@ const messageHelper = require('../utils/messageHelper');
 
 const supervisorController = {
   state: {
-    pendingConfirmations: {}
+    pendingConfirmations: {},
+    waitingForConcept: {} // Nuevo estado para esperar el concepto
   },
 
   handleSupervisorMenu: async (chatId, userId) => {
@@ -130,16 +131,87 @@ const supervisorController = {
       return;
     }
 
-    const nuevoSaldo = caja.saldo - cantidad;
-    await cajaService.updateSaldo(chatId, nuevoSaldo);
-    await telegramService.sendOperationConfirmation(chatId, 'subtract', cantidad, nuevoSaldo);
+    // En lugar de actualizar el saldo aquí, solicitamos el concepto
+    await telegramService.sendSafeMessage(
+      chatId, 
+      '📝 Por favor, ingresa el concepto o descripción de este gasto:',
+      { parse_mode: 'Markdown' }
+    );
+    
+    // Guardamos la operación pendiente para procesarla cuando se reciba el concepto
+    supervisorController.state.waitingForConcept[userId] = {
+      chatId,
+      tipo: 'gasto',
+      cantidad
+    };
     
     delete supervisorController.state.pendingConfirmations[userId];
+  },
+
+  // Nuevo método para procesar el concepto recibido
+  processConceptAndUpdateSaldo: async (chatId, userId, concepto) => {
+    const pendingTransaction = supervisorController.state.waitingForConcept[userId];
+    
+    if (!pendingTransaction) {
+      return false; // No hay transacción pendiente, no procesar
+    }
+    
+    try {
+      const { tipo, cantidad } = pendingTransaction;
+      const caja = await cajaService.findCaja(chatId);
+      
+      if (!caja) {
+        await telegramService.sendSafeMessage(
+          chatId, 
+          '⚠️ La caja chica no ha sido iniciada.'
+        );
+        delete supervisorController.state.waitingForConcept[userId];
+        return true;
+      }
+      
+      // Actualizar saldo
+      const nuevoSaldo = caja.saldo - cantidad;
+      
+      // Agregar transacción al modelo
+      if (!caja.transacciones) {
+        caja.transacciones = [];
+      }
+      
+      caja.transacciones.push({
+        tipo,
+        monto: cantidad,
+        concepto,
+        fecha: new Date()
+      });
+      
+      caja.saldo = nuevoSaldo;
+      await caja.save();
+      
+      // Enviar confirmación al usuario
+      await telegramService.sendSafeMessage(
+        chatId,
+        `✅ Se han restado *$${cantidad.toFixed(2)}* pesos. Nuevo saldo: *$${nuevoSaldo.toFixed(2)}* pesos. 💸\n📝 Concepto: *${concepto}*`,
+        { parse_mode: 'Markdown' }
+      );
+      
+      // Limpiar el estado
+      delete supervisorController.state.waitingForConcept[userId];
+      return true;
+    } catch (error) {
+      console.error('Error al procesar concepto de transacción:', error);
+      await telegramService.sendSafeMessage(
+        chatId,
+        '❌ Error al registrar la transacción. Por favor, intenta nuevamente.'
+      );
+      delete supervisorController.state.waitingForConcept[userId];
+      return true;
+    }
   },
 
   cancelOperation: async (chatId, userId) => {
     await telegramService.sendSafeMessage(chatId, '🚫 Operación cancelada.');
     delete supervisorController.state.pendingConfirmations[userId];
+    delete supervisorController.state.waitingForConcept[userId]; // También cancelar conceptos pendientes
   }
 };
 
