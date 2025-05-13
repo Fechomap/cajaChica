@@ -7,7 +7,7 @@ const messageHelper = require('../utils/messageHelper');
 const supervisorController = {
   state: {
     pendingConfirmations: {},
-    waitingForConcept: {} // Nuevo estado para esperar el concepto
+    waitingForConcept: {} // Estado para esperar el concepto
   },
 
   handleSupervisorMenu: async (chatId, userId) => {
@@ -95,9 +95,19 @@ const supervisorController = {
       return;
     }
 
-    const nuevoSaldo = caja.saldo + cantidad;
-    await cajaService.updateSaldo(chatId, nuevoSaldo);
-    await telegramService.sendOperationConfirmation(chatId, 'add', cantidad, nuevoSaldo);
+    // En lugar de actualizar el saldo directamente, solicitamos el concepto
+    await telegramService.sendSafeMessage(
+      chatId, 
+      '📝 Por favor, ingresa el concepto o descripción de este ingreso:',
+      { parse_mode: 'Markdown' }
+    );
+    
+    // Guardamos la operación pendiente para procesarla cuando se reciba el concepto
+    supervisorController.state.waitingForConcept[userId] = {
+      chatId,
+      tipo: 'ingreso',
+      cantidad
+    };
     
     delete supervisorController.state.pendingConfirmations[userId];
   },
@@ -126,19 +136,20 @@ const supervisorController = {
     if (cantidad > caja.saldo) {
       await telegramService.sendSafeMessage(
         chatId, 
-        `⚠️ No puedes restar una cantidad mayor al saldo actual de la caja chica (*$${caja.saldo.toFixed(2)}* pesos).`
+        `⚠️ No puedes restar una cantidad mayor al saldo actual de la caja chica (*$${caja.saldo.toFixed(2)}* pesos).`,
+        { parse_mode: 'Markdown' }
       );
       return;
     }
 
-    // En lugar de actualizar el saldo aquí, solicitamos el concepto
+    // Solicitamos el concepto
     await telegramService.sendSafeMessage(
       chatId, 
       '📝 Por favor, ingresa el concepto o descripción de este gasto:',
       { parse_mode: 'Markdown' }
     );
     
-    // Guardamos la operación pendiente para procesarla cuando se reciba el concepto
+    // Guardamos la operación pendiente
     supervisorController.state.waitingForConcept[userId] = {
       chatId,
       tipo: 'gasto',
@@ -148,7 +159,6 @@ const supervisorController = {
     delete supervisorController.state.pendingConfirmations[userId];
   },
 
-  // Nuevo método para procesar el concepto recibido
   processConceptAndUpdateSaldo: async (chatId, userId, concepto) => {
     const pendingTransaction = supervisorController.state.waitingForConcept[userId];
     
@@ -169,8 +179,13 @@ const supervisorController = {
         return true;
       }
       
-      // Actualizar saldo
-      const nuevoSaldo = caja.saldo - cantidad;
+      // Actualizar saldo según el tipo de transacción
+      let nuevoSaldo;
+      if (tipo === 'ingreso') {
+        nuevoSaldo = caja.saldo + cantidad;
+      } else { // tipo === 'gasto'
+        nuevoSaldo = caja.saldo - cantidad;
+      }
       
       // Agregar transacción al modelo
       if (!caja.transacciones) {
@@ -187,10 +202,17 @@ const supervisorController = {
       caja.saldo = nuevoSaldo;
       await caja.save();
       
-      // Enviar confirmación al usuario
+      // Enviar confirmación al usuario según el tipo
+      let mensaje;
+      if (tipo === 'ingreso') {
+        mensaje = `✅ Se han agregado *$${cantidad.toFixed(2)}* pesos. Nuevo saldo: *$${nuevoSaldo.toFixed(2)}* pesos. 💵\n📝 Concepto: *${concepto}*`;
+      } else {
+        mensaje = `✅ Se han restado *$${cantidad.toFixed(2)}* pesos. Nuevo saldo: *$${nuevoSaldo.toFixed(2)}* pesos. 💸\n📝 Concepto: *${concepto}*`;
+      }
+      
       await telegramService.sendSafeMessage(
         chatId,
-        `✅ Se han restado *$${cantidad.toFixed(2)}* pesos. Nuevo saldo: *$${nuevoSaldo.toFixed(2)}* pesos. 💸\n📝 Concepto: *${concepto}*`,
+        mensaje,
         { parse_mode: 'Markdown' }
       );
       
