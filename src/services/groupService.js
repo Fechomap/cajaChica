@@ -1,23 +1,9 @@
 const groupRepository = require('../repositories/groupRepository');
 const organizationService = require('./organizationService');
 const authService = require('./authService');
-const compatibilityService = require('./compatibilityService');
 
 class GroupService {
   async registerGroup(chat, organizationId = null) {
-    const dbMode = await compatibilityService.checkDatabaseMode();
-    
-    if (dbMode === 'mongodb') {
-      // En modo MongoDB, retornar un grupo mock
-      return await compatibilityService.findGroup(chat.id) || {
-        id: chat.id.toString(),
-        telegramId: chat.id,
-        title: chat.title || chat.first_name || 'Grupo',
-        organizationId: 'default',
-        isActive: true,
-      };
-    }
-    
     // Verificar si el grupo ya existe
     let group = await groupRepository.findByTelegramId(chat.id);
 
@@ -52,30 +38,6 @@ class GroupService {
   }
 
   async getGroupWithAuth(chatId, userId) {
-    const dbMode = await compatibilityService.checkDatabaseMode();
-    
-    if (dbMode === 'mongodb') {
-      const group = await compatibilityService.findGroup(chatId);
-      if (!group) {
-        // Crear grupo temporal
-        return {
-          id: chatId.toString(),
-          telegramId: chatId,
-          title: 'Grupo',
-          organizationId: 'default',
-          isActive: true,
-          userCanManage: await authService.isLegacySupervisor(userId),
-          userIsSupervisor: await authService.isLegacySupervisor(userId),
-        };
-      }
-      
-      return {
-        ...group,
-        userCanManage: await authService.isLegacySupervisor(userId),
-        userIsSupervisor: await authService.isLegacySupervisor(userId),
-      };
-    }
-    
     const group = await groupRepository.findByTelegramId(chatId);
     
     if (!group) {

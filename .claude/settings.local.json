@@ -3,7 +3,10 @@
     "allow": [
       "Bash(cp:*)",
       "Bash(mv:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(node:*)",
+      "Bash(chmod:*)",
+      "Bash(./scripts/setup-postgresql.sh:*)"
     ],
     "deny": []
   }

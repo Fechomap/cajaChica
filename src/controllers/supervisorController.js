@@ -1,5 +1,6 @@
-// Controlador simplificado que funciona con MongoDB mientras migramos
-const cajaService = require('../services/cajaService');
+// Controlador que utiliza los nuevos servicios PostgreSQL
+const groupService = require('../services/groupService');
+const transactionService = require('../services/transactionService');
 const telegramService = require('../services/telegramService');
 const messageHelper = require('../utils/messageHelper');
 const authService = require('../services/authService');
@@ -24,13 +25,23 @@ const supervisorController = {
   },
 
   initializeCaja: async (chatId, userId) => {
-    const caja = await cajaService.findCaja(chatId);
-    if (caja) {
-      await telegramService.sendSafeMessage(
-        chatId, 
-        '⚠️ La caja chica ya ha sido iniciada y no puede reiniciarse.'
-      );
-      return;
+    try {
+      const group = await groupService.getGroupWithAuth(chatId, userId);
+      if (group.isInitialized) {
+        await telegramService.sendSafeMessage(
+          chatId, 
+          '⚠️ La caja chica ya ha sido iniciada y no puede reiniciarse.'
+        );
+        return;
+      }
+    } catch (error) {
+      if (error.message === 'Grupo no registrado') {
+        await telegramService.sendSafeMessage(
+          chatId, 
+          '⚠️ Este grupo no está registrado. Contacta al administrador.'
+        );
+        return;
+      }
     }
 
     await telegramService.sendSafeMessage(
@@ -65,38 +76,66 @@ const supervisorController = {
   },
 
   viewBalance: async (chatId, userId) => {
-    const caja = await cajaService.findCaja(chatId);
-    
-    if (!caja) {
+    try {
+      const group = await groupService.getGroupWithAuth(chatId, userId);
+      const balanceData = await transactionService.getBalance(group.id, userId);
+      
+      if (!balanceData.isInitialized) {
+        await telegramService.sendSafeMessage(
+          chatId, 
+          '⚠️ Primero debes iniciar la caja chica.'
+        );
+        return;
+      }
+      
+      await telegramService.sendSaldoMessage(chatId, balanceData.balance);
+    } catch (error) {
       await telegramService.sendSafeMessage(
         chatId, 
-        '⚠️ Primero debes iniciar la caja chica.'
+        '⚠️ Error al obtener el saldo. Grupo no registrado o sin permisos.'
       );
-      return;
     }
-    
-    await telegramService.sendSaldoMessage(chatId, caja.saldo);
   },
 
   confirmAddMoney: async (chatId, userId, cantidad, concepto) => {
     try {
-      const updatedCaja = await cajaService.registerTransaction(chatId, cantidad, 'ingreso', concepto);
-      await telegramService.sendOperationConfirmation(chatId, 'add', cantidad, updatedCaja.saldo);
+      // userId es realmente telegramId, necesitamos obtener el user real
+      const user = await authService.getUserContext(userId);
+      const group = await groupService.getGroupWithAuth(chatId, userId);
+      const transaction = await transactionService.createTransaction({
+        groupId: group.id,
+        type: 'INCOME',
+        amount: cantidad,
+        concept: concepto
+      }, user.user.id);
+      
+      const balanceData = await transactionService.getBalance(group.id, user.user.id);
+      await telegramService.sendOperationConfirmation(chatId, 'add', cantidad, balanceData.balance);
       delete supervisorController.state.pendingConfirmations[userId];
     } catch (error) {
       console.error('Error en confirmAddMoney:', error);
-      await telegramService.sendSafeMessage(chatId, '❌ Error al actualizar el saldo.');
+      await telegramService.sendSafeMessage(chatId, `❌ Error al actualizar el saldo: ${error.message}`);
     }
   },
 
   confirmSubtractMoney: async (chatId, userId, cantidad, concepto) => {
     try {
-      const updatedCaja = await cajaService.registerTransaction(chatId, cantidad, 'egreso', concepto);
-      await telegramService.sendOperationConfirmation(chatId, 'subtract', cantidad, updatedCaja.saldo);
+      // userId es realmente telegramId, necesitamos obtener el user real
+      const user = await authService.getUserContext(userId);
+      const group = await groupService.getGroupWithAuth(chatId, userId);
+      const transaction = await transactionService.createTransaction({
+        groupId: group.id,
+        type: 'EXPENSE',
+        amount: cantidad,
+        concept: concepto
+      }, user.user.id);
+      
+      const balanceData = await transactionService.getBalance(group.id, user.user.id);
+      await telegramService.sendOperationConfirmation(chatId, 'subtract', cantidad, balanceData.balance);
       delete supervisorController.state.pendingConfirmations[userId];
     } catch (error) {
       console.error('Error en confirmSubtractMoney:', error);
-      await telegramService.sendSafeMessage(chatId, '❌ Error al actualizar el saldo.');
+      await telegramService.sendSafeMessage(chatId, `❌ Error al actualizar el saldo: ${error.message}`);
     }
   },
 

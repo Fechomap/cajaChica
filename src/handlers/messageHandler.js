@@ -6,7 +6,9 @@ const supervisorController = require('../controllers/supervisorController');
 const telegramService = require('../services/telegramService');
 const authMiddleware = require('../middleware/authMiddleware');
 const messageHelper = require('../utils/messageHelper');
-const cajaService = require('../services/cajaService');
+const groupService = require('../services/groupService');
+const transactionService = require('../services/transactionService');
+const authService = require('../services/authService');
 
 const messageHandler = {
   // Helper para crear contexto
@@ -100,13 +102,22 @@ const messageHandler = {
             return;
           }
 
-          await cajaService.createCaja(chatId, montoInicial);
-          await telegramService.sendSafeMessage(
-            chatId, 
-            `✅ Se ha iniciado la caja chica con *$${montoInicial.toFixed(2)}* pesos. 💰`, 
-            { parse_mode: 'Markdown' }
-          );
-          delete supervisorController.state.pendingConfirmations[userId];
+          try {
+            const group = await groupService.getGroupWithAuth(chatId, userId);
+            await groupService.initializeCashBox(group.id, userId, montoInicial);
+            await telegramService.sendSafeMessage(
+              chatId, 
+              `✅ Se ha iniciado la caja chica con *$${montoInicial.toFixed(2)}* pesos. 💰`, 
+              { parse_mode: 'Markdown' }
+            );
+            delete supervisorController.state.pendingConfirmations[userId];
+          } catch (error) {
+            await telegramService.sendSafeMessage(
+              chatId, 
+              `❌ Error al inicializar la caja: ${error.message}`
+            );
+            delete supervisorController.state.pendingConfirmations[userId];
+          }
         }
         
         else if (tipo === 'agregarDinero') {
@@ -138,30 +149,41 @@ const messageHandler = {
             return;
           }
 
-          const caja = await cajaService.findCaja(chatId);
-          if (!caja) {
+          try {
+            // userId es realmente telegramId, necesitamos obtener el user real
+            const user = await authService.getUserContext(userId);
+            const group = await groupService.getGroupWithAuth(chatId, userId);
+            const balanceData = await transactionService.getBalance(group.id, user.user.id);
+            
+            if (!balanceData.isInitialized) {
+              await telegramService.sendSafeMessage(
+                chatId, 
+                '⚠️ La caja chica no ha sido iniciada.'
+              );
+              return;
+            }
+
+            if (cantidad > balanceData.balance) {
+              await telegramService.sendSafeMessage(
+                chatId, 
+                `⚠️ No puedes restar una cantidad mayor al saldo actual de la caja chica (*$${balanceData.balance.toFixed(2)}* pesos).`
+              );
+              return;
+            }
+
+            supervisorController.state.pendingConfirmations[userId].cantidad = cantidad;
+            
             await telegramService.sendSafeMessage(
               chatId, 
-              '⚠️ La caja chica no ha sido iniciada.'
+              `¿Estás seguro de que deseas restar *$${cantidad.toFixed(2)}* pesos de la caja chica?`, 
+              messageHelper.getConfirmationKeyboard('confirmarRestar')
             );
-            return;
-          }
-
-          if (cantidad > caja.saldo) {
+          } catch (error) {
             await telegramService.sendSafeMessage(
               chatId, 
-              `⚠️ No puedes restar una cantidad mayor al saldo actual de la caja chica (*$${caja.saldo.toFixed(2)}* pesos).`
+              `❌ Error al validar el saldo: ${error.message}`
             );
-            return;
           }
-
-          supervisorController.state.pendingConfirmations[userId].cantidad = cantidad;
-          
-          await telegramService.sendSafeMessage(
-            chatId, 
-            `¿Estás seguro de que deseas restar *$${cantidad.toFixed(2)}* pesos de la caja chica?`, 
-            messageHelper.getConfirmationKeyboard('confirmarRestar')
-          );
         }
       }
     });

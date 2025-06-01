@@ -15,6 +15,20 @@ class GroupRepository {
     });
   }
 
+  async findById(id) {
+    return prisma.group.findUnique({
+      where: { id },
+      include: {
+        organization: true,
+        supervisors: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+  }
+
   async create(data) {
     return prisma.group.create({
       data: {

@@ -47,4 +47,14 @@ Thumbs.db
 # Railway build artifacts
 dist/
 
+# Prisma artifacts
+prisma/dev.db*
+prisma/migrations/
+
+# Exports and backups
 /exports/
+/backups/
+scripts/exports/
+
+# Testing and temporal files
+test-*.js

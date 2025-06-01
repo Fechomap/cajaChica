@@ -1,0 +1,152 @@
+// Esquema temporal para SQLite (testing local)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ===========================================
+// MODELOS PRINCIPALES DEL SISTEMA MULTITENANT
+// ===========================================
+
+// Modelo de Organización (Tenant)
+model Organization {
+  id                String    @id @default(cuid())
+  name              String
+  slug              String    @unique // URL-friendly identifier
+  email             String
+  phone             String?
+  
+  // Configuración de la organización
+  settings          String    @default("{}")
+  timezone          String    @default("America/Mexico_City")
+  currency          String    @default("MXN")
+  locale            String    @default("es-MX")
+  
+  // Estado y billing
+  status            String    @default("TRIAL") // OrgStatus
+  plan              String    @default("BASIC") // Plan
+  trialEndsAt       DateTime?
+  billingCycleStart DateTime  @default(now())
+  
+  // Límites del plan
+  maxGroups         Int       @default(5)
+  maxUsers          Int       @default(10)
+  maxTransactions   Int       @default(1000)
+  
+  // Metadata
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relaciones
+  users             User[]
+  groups            Group[]
+  bankInfo          BankInfo?
+}
+
+// Información bancaria de la organización
+model BankInfo {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  bankName       String
+  accountHolder  String
+  accountNumber  String
+  clabe          String?
+  debitCard      String?
+  swiftCode      String?
+  
+  encrypted      Boolean      @default(true)
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// Modelo de Usuario
+model User {
+  id               String       @id @default(cuid())
+  telegramId       String       @unique // BigInt como String en SQLite
+  username         String?
+  firstName        String?
+  lastName         String?
+  photoUrl         String?
+  
+  organizationId   String?
+  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  
+  role             String       @default("MEMBER") // UserRole
+  permissions      String       @default("[]")
+  
+  isActive         Boolean      @default(true)
+  lastActiveAt     DateTime?
+  
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  
+  supervisorGroups GroupSupervisor[]
+  transactions     Transaction[]
+}
+
+// Modelo de Grupo (Chat de Telegram)
+model Group {
+  id             String       @id @default(cuid())
+  telegramId     String       @unique // BigInt como String en SQLite
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  title          String
+  type           String       // ChatType
+  username       String?
+  description    String?
+  
+  balance        Real         @default(0) // Decimal como Real en SQLite
+  isInitialized  Boolean      @default(false)
+  initialBalance Real?
+  
+  settings       String       @default("{}")
+  isActive       Boolean      @default(true)
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  supervisors    GroupSupervisor[]
+  transactions   Transaction[]
+}
+
+// Relación muchos a muchos entre grupos y supervisores
+model GroupSupervisor {
+  id        String   @id @default(cuid())
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  addedAt   DateTime @default(now())
+  addedBy   String?
+  
+  @@unique([groupId, userId])
+}
+
+// Modelo de Transacción
+model Transaction {
+  id          String          @id @default(cuid())
+  groupId     String
+  group       Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  
+  type        String          // TransactionType
+  amount      Real            // Decimal como Real en SQLite
+  concept     String
+  
+  balanceAfter Real           // Decimal como Real en SQLite
+  
+  createdAt   DateTime        @default(now())
+  
+  @@index([groupId, createdAt])
+  @@index([userId])
+}

@@ -1,7 +1,6 @@
 // src/jobs/scheduledMessages.js
 const cron = require('node-cron');
 const bot = require('../config/bot');
-const cajaService = require('../services/cajaService');
 const saldoController = require('../controllers/saldoController');
 
 const scheduledMessages = {
@@ -14,10 +13,12 @@ const scheduledMessages = {
       cron.schedule(schedule, async () => {
         console.log(`⏰ Ejecutando mensaje programado - ${new Date().toLocaleString()}`);
         try {
-          const cajas = await cajaService.findAllCajas();
-          console.log(`📊 Encontradas ${cajas.length} cajas para notificar`);
+          // Obtener la organización por defecto y sus grupos activos
+          const defaultOrg = await organizationService.getDefaultOrganization();
+          const grupos = await groupService.getOrganizationGroups(defaultOrg.id, false);
+          console.log(`📊 Encontrados ${grupos.length} grupos para notificar`);
           
-          await sendMessagesWithDelay(cajas);
+          await sendMessagesWithDelay(grupos);
         } catch (error) {
           console.error('❌ Error general en el envío de mensajes:', error.message);
         }
@@ -31,18 +32,21 @@ const scheduledMessages = {
   }
 };
 
-async function sendMessagesWithDelay(cajas) {
-  console.log(`📊 Iniciando envío de mensajes a ${cajas.length} grupos...`);
+async function sendMessagesWithDelay(grupos) {
+  console.log(`📊 Iniciando envío de mensajes a ${grupos.length} grupos...`);
   
-  for (const [index, caja] of cajas.entries()) {
+  for (const [index, grupo] of grupos.entries()) {
     try {
-      console.log(`Enviando mensaje ${index + 1}/${cajas.length} al chat ID: ${caja.chatId}`);
+      const chatId = grupo.telegramId.toString();
+      console.log(`Enviando mensaje ${index + 1}/${grupos.length} al chat ID: ${chatId}`);
       
-      // Enviar saldo
-      await saldoController.handleSaldo(caja.chatId, null);
-      
-      // Pequeña pausa entre mensajes al mismo grupo
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Enviar saldo si el grupo está inicializado
+      if (grupo.isInitialized) {
+        await saldoController.handleSaldo(chatId, null);
+        
+        // Pequeña pausa entre mensajes al mismo grupo
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
       
       // Mensaje con formato monoespaciado
       const mensaje = 
@@ -50,23 +54,28 @@ async function sendMessagesWithDelay(cajas) {
         '- Envieme la foto 📸, o la información correspondiente al chat PERSONAL para proceder con el registro de las mismas.\n\n' +
         '- Gracias como siempre! ¡Saludos! ✨👋`';
       
-      await bot.sendMessage(caja.chatId, mensaje, { parse_mode: 'Markdown' });
+      await bot.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' });
       
-      console.log(`✅ Mensajes enviados exitosamente al chat ID: ${caja.chatId}`);
+      console.log(`✅ Mensajes enviados exitosamente al chat ID: ${chatId}`);
       
-      if (index < cajas.length - 1) {
+      if (index < grupos.length - 1) {
         console.log(`⏳ Esperando 10 segundos para el siguiente grupo...`);
         await new Promise(resolve => setTimeout(resolve, 10000));
       }
     } catch (error) {
-      console.error(`❌ Error enviando mensajes al chat ID ${caja.chatId}:`, error.message);
+      const chatId = grupo.telegramId.toString();
+      console.error(`❌ Error enviando mensajes al chat ID ${chatId}:`, error.message);
       
       if (error.response?.parameters?.migrate_to_chat_id) {
         const newChatId = error.response.parameters.migrate_to_chat_id;
-        console.log(`🔄 Actualizando chat ID ${caja.chatId} a ${newChatId}`);
+        console.log(`🔄 Chat migrado desde ${chatId} a ${newChatId}`);
         try {
-          await cajaService.updateChatId(caja.chatId, newChatId);
-          await saldoController.handleSaldo(newChatId, null);
+          // TODO: Implementar actualización de telegramId en el grupo
+          // await groupRepository.update(grupo.id, { telegramId: BigInt(newChatId) });
+          
+          if (grupo.isInitialized) {
+            await saldoController.handleSaldo(newChatId, null);
+          }
           
           const mensaje = 
             '`- Si cuenta con casetas 🚧 o algún gasto por reportar...\n\n' +

@@ -2,7 +2,6 @@
 const transactionService = require('../services/transactionService');
 const telegramService = require('../services/telegramService');
 const authService = require('../services/authService');
-const compatibilityService = require('../services/compatibilityService');
 
 const saldoController = {
   handleSaldo: async (ctx) => {
@@ -22,9 +21,7 @@ const saldoController = {
       // Obtener contexto del usuario
       const userContext = await authService.getUserContext(userId);
       
-      // En modo MongoDB, usar chatId como groupId
-      const dbMode = await compatibilityService.checkDatabaseMode();
-      const groupId = dbMode === 'mongodb' ? chatId : ctx.groupContext?.id;
+      const groupId = ctx.groupContext?.id;
 
       // Obtener información del balance
       const balanceInfo = await transactionService.getBalance(

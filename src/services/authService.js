@@ -1,17 +1,8 @@
 const userRepository = require('../repositories/userRepository');
 const organizationService = require('./organizationService');
-const compatibilityService = require('./compatibilityService');
 
 class AuthService {
   async authenticateUser(telegramUser) {
-    // Verificar modo de base de datos
-    const dbMode = await compatibilityService.checkDatabaseMode();
-    
-    if (dbMode === 'mongodb') {
-      // Modo compatibilidad con MongoDB
-      return await compatibilityService.getUser(telegramUser.id);
-    }
-    
     let user = await userRepository.findByTelegramId(telegramUser.id);
 
     if (!user) {
@@ -48,17 +39,6 @@ class AuthService {
   }
 
   async getUserContext(telegramId) {
-    const dbMode = await compatibilityService.checkDatabaseMode();
-    
-    if (dbMode === 'mongodb') {
-      const user = await compatibilityService.getUser(telegramId);
-      return {
-        user,
-        organization: user.organization,
-        supervisedGroups: [],
-      };
-    }
-    
     const user = await userRepository.findByTelegramId(telegramId);
     
     if (!user) {
@@ -73,20 +53,6 @@ class AuthService {
   }
 
   async checkPermission(userId, permission, groupId = null) {
-    const dbMode = await compatibilityService.checkDatabaseMode();
-    
-    if (dbMode === 'mongodb') {
-      // En modo MongoDB, verificar si es supervisor
-      const user = await compatibilityService.getUser(userId);
-      const hasPermission = user.role === 'SUPERVISOR' || user.role === 'ADMIN';
-      
-      if (!hasPermission) {
-        throw new Error('No tienes permisos para realizar esta acción');
-      }
-      
-      return true;
-    }
-    
     const hasPermission = await userRepository.hasPermission(userId, permission, groupId);
     
     if (!hasPermission) {

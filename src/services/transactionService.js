@@ -2,7 +2,6 @@ const transactionRepository = require('../repositories/transactionRepository');
 const groupRepository = require('../repositories/groupRepository');
 const authService = require('./authService');
 const organizationService = require('./organizationService');
-const compatibilityService = require('./compatibilityService');
 const { Decimal } = require('@prisma/client/runtime/library');
 
 class TransactionService {
@@ -131,23 +130,6 @@ class TransactionService {
   }
 
   async getBalance(groupId, userId) {
-    const dbMode = await compatibilityService.checkDatabaseMode();
-    
-    if (dbMode === 'mongodb') {
-      // En modo MongoDB, usar el chatId como groupId
-      const group = await compatibilityService.findGroup(groupId);
-      
-      if (!group) {
-        throw new Error('Grupo no encontrado');
-      }
-      
-      return {
-        balance: group.balance,
-        isInitialized: group.isInitialized,
-        lastTransactions: [],
-      };
-    }
-    
     // Verificar permisos
     await authService.checkPermission(userId, 'balance.view', groupId);
 
