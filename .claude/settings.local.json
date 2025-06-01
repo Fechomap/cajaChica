@@ -6,7 +6,10 @@
       "Bash(rm:*)",
       "Bash(node:*)",
       "Bash(chmod:*)",
-      "Bash(./scripts/setup-postgresql.sh:*)"
+      "Bash(./scripts/setup-postgresql.sh:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

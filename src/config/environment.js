@@ -7,8 +7,7 @@ const environment = {
     token: process.env.BOT_TOKEN || process.env.TELEGRAM_TOKEN
   },
   database: {
-    uri: process.env.MONGODB_URI,
-    postgresUrl: process.env.DATABASE_URL
+    url: process.env.DATABASE_URL
   },
   server: {
     port: process.env.PORT || 3000,
@@ -18,7 +17,9 @@ const environment = {
   },
   webhook: {},
   supervisors: {
-    authorized: [7143094298, 6330970125]
+    authorized: process.env.SUPERVISORES_IDS 
+      ? process.env.SUPERVISORES_IDS.split(',').map(id => parseInt(id.trim().split('#')[0].split('//')[0]))
+      : []
   }
 };
 

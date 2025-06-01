@@ -77,8 +77,10 @@ const supervisorController = {
 
   viewBalance: async (chatId, userId) => {
     try {
+      // userId es realmente telegramId, necesitamos obtener el user real
+      const user = await authService.getUserContext(userId);
       const group = await groupService.getGroupWithAuth(chatId, userId);
-      const balanceData = await transactionService.getBalance(group.id, userId);
+      const balanceData = await transactionService.getBalance(group.id, user.user.id);
       
       if (!balanceData.isInitialized) {
         await telegramService.sendSafeMessage(
