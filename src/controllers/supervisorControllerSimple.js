@@ -43,14 +43,13 @@ const supervisorController = {
   },
 
   addMoney: async (chatId, userId) => {
-    // Establecer el estado esperando concepto (igual que restar)
-    supervisorController.state.waitingForConcept[userId] = { chatId, tipo: 'agregarDinero' };
-    
     await telegramService.sendSafeMessage(
       chatId, 
-      '➕ *Agregar Dinero*:\n¿Cuál es el concepto del ingreso? (describe el origen del dinero)', 
+      '➕ *Agregar Dinero*:\n¿Cuánto deseas agregar?', 
       { parse_mode: 'Markdown' }
     );
+    
+    supervisorController.state.pendingConfirmations[userId] = { chatId, tipo: 'agregarDinero' };
   },
 
   subtractMoney: async (chatId, userId) => {
@@ -78,9 +77,9 @@ const supervisorController = {
     await telegramService.sendSaldoMessage(chatId, caja.saldo);
   },
 
-  confirmAddMoney: async (chatId, userId, cantidad, concepto) => {
+  confirmAddMoney: async (chatId, userId, cantidad) => {
     try {
-      const updatedCaja = await cajaService.registerTransaction(chatId, cantidad, 'ingreso', concepto);
+      const updatedCaja = await cajaService.updateSaldo(chatId, cantidad, 'add');
       await telegramService.sendOperationConfirmation(chatId, 'add', cantidad, updatedCaja.saldo);
       delete supervisorController.state.pendingConfirmations[userId];
     } catch (error) {
@@ -106,25 +105,16 @@ const supervisorController = {
   },
 
   processConceptAndUpdateSaldo: async (chatId, userId, concepto) => {
-    // Obtener el tipo de operación del estado
-    const operacion = supervisorController.state.waitingForConcept[userId];
-    
-    if (!operacion) return;
-    
     // Establecer el concepto y pedir la cantidad
     supervisorController.state.pendingConfirmations[userId] = { 
       chatId, 
-      tipo: operacion.tipo,
+      tipo: 'restarDinero',
       concepto: concepto 
     };
     
-    const mensaje = operacion.tipo === 'agregarDinero' 
-      ? `📝 Concepto registrado: *${concepto}*\n\n💵 Ahora, ¿cuánto dinero deseas agregar?`
-      : `📝 Concepto registrado: *${concepto}*\n\n💵 Ahora, ¿cuánto dinero deseas restar?`;
-    
     await telegramService.sendSafeMessage(
       chatId, 
-      mensaje, 
+      `📝 Concepto registrado: *${concepto}*\n\n💵 Ahora, ¿cuánto dinero deseas restar?`, 
       { parse_mode: 'Markdown' }
     );
     

@@ -4,10 +4,11 @@ process.env.TZ = 'America/Mexico_City';
 
 const environment = {
   telegram: {
-    token: process.env.TELEGRAM_TOKEN
+    token: process.env.BOT_TOKEN || process.env.TELEGRAM_TOKEN
   },
   database: {
-    uri: process.env.MONGODB_URI
+    uri: process.env.MONGODB_URI,
+    postgresUrl: process.env.DATABASE_URL
   },
   server: {
     port: process.env.PORT || 3000,

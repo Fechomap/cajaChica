@@ -3,27 +3,53 @@ const bot = require('../config/bot');
 const saldoController = require('../controllers/saldoController');
 const cuentaController = require('../controllers/cuentaController');
 const supervisorController = require('../controllers/supervisorController');
-const cajaService = require('../services/cajaService');
 const telegramService = require('../services/telegramService');
+const authMiddleware = require('../middleware/authMiddleware');
 const messageHelper = require('../utils/messageHelper');
+const cajaService = require('../services/cajaService');
 
 const messageHandler = {
+  // Helper para crear contexto
+  createContext: async (msg) => {
+    const ctx = {
+      chat: msg.chat,
+      from: msg.from,
+      message: msg,
+    };
+
+    // Adjuntar contexto de usuario y grupo
+    await authMiddleware.attachUserContext(ctx, () => {});
+    
+    return ctx;
+  },
+
   register: () => {
     // Comandos
     bot.onText(/\/saldo/, async (msg) => {
-      const chatId = msg.chat.id;
-      await saldoController.handleSaldo(chatId, msg.from.id);
+      const ctx = await messageHandler.createContext(msg);
+      await saldoController.handleSaldo(ctx);
     });
 
     bot.onText(/\/cuenta/, async (msg) => {
-      const chatId = msg.chat.id;
-      await cuentaController.handleCuentaCommand(chatId);
+      const ctx = await messageHandler.createContext(msg);
+      await cuentaController.handleCuentaCommand(ctx);
     });
 
     bot.onText(/\/sup/, async (msg) => {
-      const chatId = msg.chat.id;
-      const userId = msg.from.id;
-      await supervisorController.handleSupervisorMenu(chatId, userId);
+      const ctx = await messageHandler.createContext(msg);
+      
+      // Verificar permisos de supervisor
+      if (ctx.chat.type === 'private') {
+        await telegramService.sendSafeMessage(
+          ctx.chat.id,
+          '❌ Este comando solo funciona en grupos.'
+        );
+        return;
+      }
+
+      await authMiddleware.requireGroupSupervisor(ctx, async () => {
+        await supervisorController.handleSupervisorMenu(ctx);
+      });
     });
 
     // Mensajes de texto
@@ -34,8 +60,11 @@ const messageHandler = {
       // Ignorar comandos
       if (msg.text?.startsWith('/')) return;
 
+      // Crear contexto
+      const ctx = await messageHandler.createContext(msg);
+
       // Procesar número de WhatsApp
-      if (await cuentaController.processWhatsAppNumber(chatId, msg.text)) {
+      if (await cuentaController.processWhatsAppNumber(ctx)) {
         return;
       }
 

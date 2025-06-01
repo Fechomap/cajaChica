@@ -16,7 +16,8 @@ const callbackHandler = {
 
       switch(data) {
         case 'verSaldo':
-          await saldoController.handleSaldo(chatId, userId);
+          // Usar el método viewBalance del supervisorController que funciona con chatId
+          await supervisorController.viewBalance(chatId, userId);
           break;
         case 'iniciarCaja':
           await supervisorController.initializeCaja(chatId, userId);
@@ -28,13 +29,23 @@ const callbackHandler = {
           await supervisorController.subtractMoney(chatId, userId);
           break;
         case 'confirmarAgregar':
-          await supervisorController.confirmAddMoney(chatId, userId);
+          const confirmDataAdd = supervisorController.state.pendingConfirmations[userId];
+          if (confirmDataAdd && confirmDataAdd.cantidad && confirmDataAdd.concepto) {
+            await supervisorController.confirmAddMoney(chatId, userId, confirmDataAdd.cantidad, confirmDataAdd.concepto);
+          }
           break;
         case 'confirmarRestar':
-          await supervisorController.confirmSubtractMoney(chatId, userId);
+          const confirmDataSub = supervisorController.state.pendingConfirmations[userId];
+          if (confirmDataSub && confirmDataSub.cantidad && confirmDataSub.concepto) {
+            await supervisorController.confirmSubtractMoney(chatId, userId, confirmDataSub.cantidad, confirmDataSub.concepto);
+          }
           break;
         case 'enviar_whatsapp':
-          await cuentaController.startWaitingForWhatsApp(chatId);
+          const ctx = {
+            chat: { id: chatId },
+            from: { id: userId }
+          };
+          await cuentaController.startWaitingForWhatsApp(ctx);
           break;
         case 'cancelar':
           await supervisorController.cancelOperation(chatId, userId);

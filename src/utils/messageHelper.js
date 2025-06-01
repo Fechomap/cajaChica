@@ -13,6 +13,19 @@ const messageHelper = {
   **T débito:** 4152314307139520
   `;
     },
+
+    generateBankAccountMessageFromOrg: (bankInfo) => {
+      return `
+  CUENTA ${bankInfo.bankName || 'BANCARIA'}:
+  
+  **Nombre:** ${bankInfo.accountHolder}
+  
+  **Cuenta:** ${bankInfo.accountNumber}
+  
+  ${bankInfo.clabe ? `**CLABE:** ${bankInfo.clabe}\n` : ''}
+  ${bankInfo.debitCard ? `**T débito:** ${bankInfo.debitCard}` : ''}
+  `;
+    },
   
     generateWhatsAppMessage: (number) => {
       const mensajeWhatsApp = encodeURIComponent(`\`\`\`
@@ -25,6 +38,23 @@ const messageHelper = {
   CLABE: 012180015826805612
   
   T débito: 4152314307139520
+  \`\`\``);
+  
+      const whatsappUrl = `https://wa.me/52${number}?text=${mensajeWhatsApp}`;
+  
+      return `✅ Número capturado: **${number}**\n\n[Enviar datos a WhatsApp](${whatsappUrl})`;
+    },
+
+    generateWhatsAppMessageFromOrg: (number, bankInfo) => {
+      const mensajeWhatsApp = encodeURIComponent(`\`\`\`
+  CUENTA ${bankInfo.bankName || 'BANCARIA'}:
+  
+  Nombre: ${bankInfo.accountHolder}
+  
+  Cuenta: ${bankInfo.accountNumber}
+  
+  ${bankInfo.clabe ? `CLABE: ${bankInfo.clabe}\n` : ''}
+  ${bankInfo.debitCard ? `T débito: ${bankInfo.debitCard}` : ''}
   \`\`\``);
   
       const whatsappUrl = `https://wa.me/52${number}?text=${mensajeWhatsApp}`;

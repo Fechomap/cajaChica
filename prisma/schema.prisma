@@ -1,0 +1,352 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================
+// MODELOS PRINCIPALES DEL SISTEMA MULTITENANT
+// ===========================================
+
+// Modelo de Organización (Tenant)
+model Organization {
+  id                String    @id @default(cuid())
+  name              String
+  slug              String    @unique // URL-friendly identifier
+  email             String
+  phone             String?
+  
+  // Configuración de la organización
+  settings          Json      @default("{}")
+  timezone          String    @default("America/Mexico_City")
+  currency          String    @default("MXN")
+  locale            String    @default("es-MX")
+  
+  // Datos bancarios de la organización
+  bankInfo          BankInfo?
+  
+  // Estado y billing
+  status            OrgStatus @default(TRIAL)
+  plan              Plan      @default(BASIC)
+  trialEndsAt       DateTime?
+  billingCycleStart DateTime  @default(now())
+  
+  // Límites del plan
+  maxGroups         Int       @default(5)
+  maxUsers          Int       @default(10)
+  maxTransactions   Int       @default(1000)
+  
+  // Metadata
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relaciones
+  users             User[]
+  groups            Group[]
+  bankInfoTemplates BankInfoTemplate[]
+  auditLogs         AuditLog[]
+  webhookEvents     WebhookEvent[]
+  notifications     NotificationTemplate[]
+}
+
+// Información bancaria de la organización
+model BankInfo {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  bankName       String
+  accountHolder  String
+  accountNumber  String
+  clabe          String?      // Para México
+  debitCard      String?
+  swiftCode      String?
+  
+  // Encriptar información sensible
+  encrypted      Boolean      @default(true)
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// Plantillas de información bancaria
+model BankInfoTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  name           String
+  template       String       // Formato del mensaje
+  isDefault      Boolean      @default(false)
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  @@unique([organizationId, name])
+}
+
+// Modelo de Usuario
+model User {
+  id               String       @id @default(cuid())
+  telegramId       BigInt       @unique
+  username         String?
+  firstName        String?
+  lastName         String?
+  photoUrl         String?
+  
+  // Relación con organización
+  organizationId   String?
+  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  
+  // Roles y permisos
+  role             UserRole     @default(MEMBER)
+  permissions      String[]     @default([])
+  
+  // Estado
+  isActive         Boolean      @default(true)
+  lastActiveAt     DateTime?
+  
+  // Metadata
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  
+  // Relaciones
+  supervisorGroups GroupSupervisor[]
+  transactions     Transaction[]
+  auditLogs        AuditLog[]
+}
+
+// Modelo de Grupo (Chat de Telegram)
+model Group {
+  id             String       @id @default(cuid())
+  telegramId     BigInt       @unique
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  title          String
+  type           ChatType
+  username       String?
+  description    String?
+  
+  // Estado de la caja
+  balance        Decimal      @default(0) @db.Decimal(19, 2)
+  isInitialized  Boolean      @default(false)
+  initialBalance Decimal?     @db.Decimal(19, 2)
+  
+  // Configuración
+  settings       Json         @default("{}")
+  isActive       Boolean      @default(true)
+  
+  // Metadata
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  // Relaciones
+  supervisors    GroupSupervisor[]
+  transactions   Transaction[]
+  schedules      MessageSchedule[]
+  cashBoxLogs    CashBoxLog[]
+}
+
+// Relación muchos a muchos entre grupos y supervisores
+model GroupSupervisor {
+  id        String   @id @default(cuid())
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  addedAt   DateTime @default(now())
+  addedBy   String?
+  
+  @@unique([groupId, userId])
+}
+
+// Modelo de Transacción
+model Transaction {
+  id          String          @id @default(cuid())
+  groupId     String
+  group       Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  
+  type        TransactionType
+  amount      Decimal         @db.Decimal(19, 2)
+  concept     String
+  
+  // Balance después de la transacción
+  balanceAfter Decimal        @db.Decimal(19, 2)
+  
+  // Metadata
+  createdAt   DateTime        @default(now())
+  
+  // Archivos adjuntos (fotos de tickets, etc.)
+  attachments Attachment[]
+  
+  @@index([groupId, createdAt])
+  @@index([userId])
+}
+
+// Archivos adjuntos
+model Attachment {
+  id            String      @id @default(cuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  
+  fileId        String      // Telegram file ID
+  fileType      FileType
+  fileName      String?
+  fileSize      Int?
+  
+  createdAt     DateTime    @default(now())
+}
+
+// Programación de mensajes automáticos
+model MessageSchedule {
+  id           String   @id @default(cuid())
+  groupId      String
+  group        Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  cronPattern  String   // Expresión cron
+  messageType  String   // Tipo de mensaje a enviar
+  isActive     Boolean  @default(true)
+  
+  lastRunAt    DateTime?
+  nextRunAt    DateTime?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// Logs de caja chica
+model CashBoxLog {
+  id        String   @id @default(cuid())
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  action    String
+  details   Json
+  userId    String?
+  
+  createdAt DateTime @default(now())
+}
+
+// Logs de auditoría
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  action         String
+  entity         String
+  entityId       String?
+  changes        Json?
+  ipAddress      String?
+  userAgent      String?
+  
+  createdAt      DateTime     @default(now())
+  
+  @@index([organizationId, createdAt])
+  @@index([userId])
+}
+
+// Plantillas de notificaciones
+model NotificationTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  name           String
+  type           NotificationType
+  template       String
+  variables      String[]     @default([])
+  isActive       Boolean      @default(true)
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  @@unique([organizationId, name])
+}
+
+// Eventos de webhook para integraciones
+model WebhookEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  eventType      String
+  payload        Json
+  status         WebhookStatus @default(PENDING)
+  attempts       Int          @default(0)
+  lastAttemptAt  DateTime?
+  nextRetryAt    DateTime?
+  
+  createdAt      DateTime     @default(now())
+  processedAt    DateTime?
+  
+  @@index([organizationId, status])
+  @@index([nextRetryAt])
+}
+
+// ===========================================
+// ENUMS
+// ===========================================
+
+enum OrgStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum Plan {
+  BASIC
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  SUPERVISOR
+  MEMBER
+}
+
+enum ChatType {
+  PRIVATE
+  GROUP
+  SUPERGROUP
+  CHANNEL
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum FileType {
+  PHOTO
+  DOCUMENT
+  VOICE
+  VIDEO
+}
+
+enum NotificationType {
+  BALANCE_REPORT
+  EXPENSE_REMINDER
+  LOW_BALANCE
+  CUSTOM
+}
+
+enum WebhookStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}

@@ -30,13 +30,33 @@ const cajaService = {
     }
   },
 
-  updateSaldo: async (chatId, nuevoSaldo) => {
+  updateSaldo: async (chatId, cantidad, operacion) => {
     try {
       const caja = await CajaChica.findOne({ chatId });
       if (!caja) {
         throw new Error('Caja no encontrada');
       }
+      
+      const cantidadNum = parseFloat(cantidad);
+      const nuevoSaldo = operacion === 'add' 
+        ? caja.saldo + cantidadNum 
+        : caja.saldo - cantidadNum;
+      
+      if (nuevoSaldo < 0) {
+        throw new Error('Saldo insuficiente');
+      }
+      
       caja.saldo = nuevoSaldo;
+      
+      // Agregar transacción al historial
+      caja.transacciones.push({
+        tipo: operacion === 'add' ? 'ingreso' : 'gasto',
+        monto: cantidadNum,
+        concepto: operacion === 'add' ? 'Ingreso de dinero' : 'Egreso de dinero',
+        fecha: new Date(),
+        saldoDespues: nuevoSaldo
+      });
+      
       return await caja.save();
     } catch (error) {
       console.error('Error al actualizar saldo:', error);
@@ -45,18 +65,20 @@ const cajaService = {
   },
 
   // Nuevo método para registrar transacción con concepto
-  registerTransaction: async (chatId, tipo, monto, concepto) => {
+  registerTransaction: async (chatId, monto, tipo, concepto) => {
     try {
       const caja = await CajaChica.findOne({ chatId });
       if (!caja) {
         throw new Error('Caja no encontrada');
       }
       
+      const montoNum = parseFloat(monto);
+      
       // Actualizar saldo según el tipo de transacción
       if (tipo === 'ingreso') {
-        caja.saldo += monto;
-      } else if (tipo === 'gasto') {
-        caja.saldo -= monto;
+        caja.saldo += montoNum;
+      } else if (tipo === 'egreso' || tipo === 'gasto') {
+        caja.saldo -= montoNum;
       }
       
       // Asegurarse de que existe la propiedad transacciones
@@ -66,10 +88,11 @@ const cajaService = {
       
       // Agregar la nueva transacción
       caja.transacciones.push({
-        tipo,
-        monto,
+        tipo: tipo === 'egreso' ? 'gasto' : tipo,
+        monto: montoNum,
         concepto,
-        fecha: new Date()
+        fecha: new Date(),
+        saldoDespues: caja.saldo
       });
       
       return await caja.save();

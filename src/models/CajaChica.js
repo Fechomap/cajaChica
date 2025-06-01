@@ -6,7 +6,8 @@ const TransaccionSchema = new mongoose.Schema({
   tipo: { type: String, enum: ['ingreso', 'gasto'], required: true },
   monto: { type: Number, required: true },
   concepto: { type: String, required: true },
-  fecha: { type: Date, default: Date.now }
+  fecha: { type: Date, default: Date.now },
+  saldoDespues: { type: Number, required: false }
 });
 
 const CajaChicaSchema = new mongoose.Schema({

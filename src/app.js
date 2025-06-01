@@ -2,7 +2,7 @@
 const express = require('express');
 const bot = require('./config/bot');
 const environment = require('./config/environment');
-const connectDB = require('./config/database');
+const { connectDB, disconnectDB } = require('./config/database');
 const webhookHelper = require('./utils/webhookHelper');
 const webhookRoutes = require('./routes/webhookRoutes');
 const messageHandler = require('./handlers/messageHandler');
@@ -64,6 +64,7 @@ process.on('SIGTERM', async () => {
   if (environment.server.isProduction) {
     await bot.deleteWebHook();
   }
+  await disconnectDB();
   process.exit(0);
 });
 
@@ -72,6 +73,7 @@ process.on('SIGINT', async () => {
   if (environment.server.isProduction) {
     await bot.deleteWebHook();
   }
+  await disconnectDB();
   process.exit(0);
 });
 
