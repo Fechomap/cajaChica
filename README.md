@@ -27,7 +27,7 @@ caja/
 │   ├── config/           # Configuraciones del sistema
 │   ├── controllers/      # Controladores de lógica de negocio
 │   ├── handlers/         # Manejadores de eventos Telegram
-│   ├── models/           # Modelos de MongoDB
+│   ├── repositories/     # Capa de acceso a datos (PostgreSQL)
 │   ├── services/         # Servicios para operaciones
 │   ├── middleware/       # Middleware (autenticación)
 │   ├── utils/            # Utilidades
@@ -39,6 +39,30 @@ caja/
 ├── Procfile              # Configuración para Railway
 └── package.json          # Dependencias
 ```
+
+## Arquitectura Técnica
+
+### Base de Datos PostgreSQL + Prisma ORM
+- **PostgreSQL**: Base de datos relacional moderna y robusta
+- **Prisma**: ORM type-safe para mejor desarrollo y mantenimiento
+- **Migraciones automáticas**: Esquema versionado y deployable
+- **Arquitectura multitenant**: Soporte para múltiples organizaciones
+
+### Estructura Modular
+```
+src/
+├── repositories/     # Capa de acceso a datos (Prisma)
+├── services/         # Lógica de negocio
+├── controllers/      # Controladores HTTP/Telegram
+├── handlers/         # Manejadores de eventos
+└── middleware/       # Autenticación y validación
+```
+
+### Funcionalidades Avanzadas
+- **Roles y permisos**: OWNER, ADMIN, SUPERVISOR, MEMBER
+- **Auditoria completa**: Logs de todas las transacciones
+- **Validaciones robustas**: Entrada de datos y permisos
+- **Manejo de errores**: Logging estructurado y recovery
 
 ## Características
 
@@ -57,7 +81,7 @@ caja/
 - Cuenta en [Railway](https://railway.app/)
 - Repositorio Git con el código del proyecto
 - Token de bot de Telegram (obtenido a través de [@BotFather](https://t.me/BotFather))
-- Base de datos MongoDB (puede ser desplegada en Railway o externamente)
+- Base de datos PostgreSQL (Incluída automáticamente en Railway)
 
 ### Pasos para el Despliegue
 
@@ -70,7 +94,7 @@ caja/
    - En la pestaña "Variables", agrega las siguientes variables:
      ```
      TELEGRAM_TOKEN=tu_token_de_telegram
-     MONGODB_URI=tu_uri_de_mongodb
+     DATABASE_URL=postgresql://usuario:password@localhost:5432/caja_chica
      NODE_ENV=production
      ```
 
@@ -105,7 +129,8 @@ caja/
 | Variable | Descripción | Obligatoria |
 |----------|-------------|-------------|
 | `TELEGRAM_TOKEN` | Token de acceso del bot de Telegram | ✅ |
-| `MONGODB_URI` | URI de conexión a MongoDB | ✅ |
+| `DATABASE_URL` | URI de conexión a PostgreSQL | ✅ |
+| `SUPERVISORES_IDS` | IDs de Telegram de supervisores (separados por coma) | ✅ |
 | `NODE_ENV` | Entorno (production/development) | ✅ |
 | `PORT` | Puerto del servidor (proporcionado por Railway) | ⚙️ Auto |
 | `RAILWAY_PUBLIC_DOMAIN` | Dominio público (proporcionado por Railway) | ⚙️ Auto |
@@ -177,7 +202,8 @@ cp .env.example .env
 
 # Editar .env con tus credenciales
 # TELEGRAM_TOKEN=tu_token
-# MONGODB_URI=tu_conexion_mongodb
+# DATABASE_URL=postgresql://usuario:password@localhost:5432/caja_chica
+# SUPERVISORES_IDS=123456789,987654321
 ```
 
 ### Ejecución en Modo Desarrollo
@@ -206,7 +232,7 @@ npm test
 ### Bot no responde en Telegram
 - Verifica que el token sea correcto
 - Asegúrate de que el bot no esté bloqueado por el usuario
-- Comprueba la conectividad a MongoDB
+- Comprueba la conectividad a PostgreSQL
 - Revisa los logs de Railway para errores
 
 ### Migración de Grupos
@@ -215,10 +241,11 @@ Si un grupo se actualiza a supergrupo, el bot maneja automáticamente la migraci
 - Actualiza la referencia del chatId en la base de datos
 - Reenvía el mensaje al nuevo chatId
 
-### Errores de Conexión a MongoDB
-- Verifica que la URI de MongoDB sea correcta
+### Errores de Conexión a PostgreSQL
+- Verifica que la URI de PostgreSQL sea correcta (DATABASE_URL)
 - Asegúrate de que las credenciales sean válidas
-- Comprueba que las IPs estén permitidas en la configuración de red de MongoDB Atlas
+- En Railway, PostgreSQL se configura automáticamente
+- Para desarrollo local, instala PostgreSQL y crea la base de datos
 
 ---
 
