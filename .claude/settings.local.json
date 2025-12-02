@@ -9,7 +9,18 @@
       "Bash(./scripts/setup-postgresql.sh:*)",
       "Bash(find:*)",
       "Bash(ls:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Bash(npm run type-check:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm test:*)",
+      "Bash(cd:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git log --all --full-history --source -- .env)",
+      "Bash(npx vitest run)",
+      "Bash(npm run lint)",
+      "Bash(npx prettier --check \"src/**/*.ts\")"
     ],
     "deny": []
   }
